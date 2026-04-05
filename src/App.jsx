@@ -254,35 +254,35 @@ function ContextQuiz() {
       </div>
 
       <div className={`q-card${feedback ? ` ${feedback}` : ''}`}>
-        {/* Sentence with inline input */}
-        <p className="ctx-sentence">
-          <span>{sentence.parts[0]}</span>
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            disabled={!!feedback}
-            className={`ctx-input${feedback ? ` ${feedback}` : ''}`}
-            style={{ width: `${Math.max(sentence.answer.length * 1.1 + 1, 6)}ch` }}
-            autoComplete="off"
-            autoCorrect="off"
-            spellCheck="false"
-            aria-label="Type your answer"
-          />
-          <span>{sentence.parts[1]}</span>
-        </p>
-
-        {/* Translation */}
-        <p className="ctx-translation">{sentence.translation}</p>
-
-        {/* Base word hint */}
-        <p className="ctx-hint">
-          Ffurf sylfaenol / Base form: <strong>{sentence.baseWord}</strong>{' '}
-          <span className="meaning">({sentence.meaning})</span>
-        </p>
-
         <form onSubmit={handleSubmit}>
+          {/* Sentence with inline input */}
+          <p className="ctx-sentence">
+            <span>{sentence.parts[0]}</span>
+            <input
+              ref={inputRef}
+              type="text"
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              disabled={!!feedback}
+              className={`ctx-input${feedback ? ` ${feedback}` : ''}`}
+              style={{ width: `${Math.max(sentence.answer.length * 1.1 + 1, 6)}ch` }}
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck="false"
+              aria-label="Type your answer"
+            />
+            <span>{sentence.parts[1]}</span>
+          </p>
+
+          {/* Translation */}
+          <p className="ctx-translation">{sentence.translation}</p>
+
+          {/* Base word hint */}
+          <p className="ctx-hint">
+            Ffurf sylfaenol / Base form: <strong>{sentence.baseWord}</strong>{' '}
+            <span className="meaning">({sentence.meaning})</span>
+          </p>
+
           <button type="submit" className={feedback ? 'next' : ''}>
             {feedback ? 'Nesaf →' : 'Gwirio ✓'}
           </button>
