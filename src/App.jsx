@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
-import { words, MUTATION_TYPES } from './data/words'
-import { sentences } from './data/sentences'
+import { MUTATION_TYPES } from './data/words'
+import words from './data/words.json'
+import sentences from './data/sentences.json'
 import './App.css'
 
 // Accept answers that differ only in Welsh diacritics (ŵ→w, ŷ→y, etc.)
