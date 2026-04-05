@@ -21,6 +21,10 @@ import threading
 import time
 from pathlib import Path
 
+MAX_RETRIES = 4
+RETRY_DELAY = 5   # seconds between retries
+MAX_AVOID   = 80  # cap the "avoid" list so prompts don't get huge
+
 try:
     from openai import OpenAI
 except ImportError:
@@ -200,27 +204,40 @@ class Spinner:
 
 def generate(client, mode, count, existing_data):
     if mode == "words":
-        existing_words = [w["word"] for w in existing_data]
-        user_prompt = WORDS_USER.format(count=count, existing=", ".join(existing_words))
+        avoid = [w["word"] for w in existing_data][-MAX_AVOID:]
+        user_prompt = WORDS_USER.format(count=count, existing=", ".join(avoid))
         system_prompt = WORDS_SYSTEM
         validator = validate_word
     else:
-        existing_words = [s["baseWord"] for s in existing_data]
-        user_prompt = SENTENCES_USER.format(count=count, existing=", ".join(existing_words))
+        avoid = [s["baseWord"] for s in existing_data][-MAX_AVOID:]
+        user_prompt = SENTENCES_USER.format(count=count, existing=", ".join(avoid))
         system_prompt = SENTENCES_SYSTEM
         validator = validate_sentence
 
     model = "gpt-4o-mini"
     print(f"Requesting {count} {mode} from {model}…")
-    with Spinner("Waiting for API response"):
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user",   "content": user_prompt},
-            ],
-            temperature=0.7,
-        )
+
+    response = None
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            with Spinner(f"Waiting for API response (attempt {attempt}/{MAX_RETRIES})"):
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user",   "content": user_prompt},
+                    ],
+                    temperature=0.7,
+                )
+            break  # success
+        except Exception as e:
+            print(f"\r⚠️  API error (attempt {attempt}/{MAX_RETRIES}): {e}")
+            if attempt < MAX_RETRIES:
+                print(f"   Retrying in {RETRY_DELAY}s…")
+                time.sleep(RETRY_DELAY)
+            else:
+                print("   All retries exhausted — skipping this batch.")
+                return []
 
     raw = response.choices[0].message.content
     print(f"✓ Response received ({len(raw)} chars). Parsing…")
@@ -294,15 +311,24 @@ def main():
         remaining -= args.batch_size
 
     all_new = []
-    # Pass a growing "seen" list to each batch so it avoids duplicating across batches too
     seen = list(existing)
+    empty_streak = 0
+    MAX_EMPTY_STREAK = 3  # stop if 3 batches in a row add nothing new
 
     for batch_num, batch_count in enumerate(batches, 1):
         print(f"\n── Batch {batch_num}/{len(batches)} ({'─' * 30})")
         batch_items = generate(client, args.mode, batch_count, seen)
         deduped = deduplicate(seen, batch_items, dedup_key)
         all_new.extend(deduped)
-        seen = seen + deduped  # keep future batches aware of what we've already got
+        seen = seen + deduped
+
+        if deduped:
+            empty_streak = 0
+        else:
+            empty_streak += 1
+            if empty_streak >= MAX_EMPTY_STREAK:
+                print(f"\n⚠️  {MAX_EMPTY_STREAK} consecutive batches added nothing new — stopping early.")
+                break
 
     print(f"\n{'─'*50}")
     print(json.dumps(all_new, ensure_ascii=False, indent=2))
