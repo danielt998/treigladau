@@ -89,8 +89,20 @@ Welsh mutation triggers include:
   None:     subject of sentence, "y/yr" (the) + masculine noun, consonants
             with no mutation form (e.g. "m" after "fy")
 
-Important: "yn" (in) assimilates before mutations — use "ym" before m/mh,
-"yng" before ng/ngh, "yn" before n/nh.
+Important grammar rules:
+- "yn" (in) assimilates before mutations — use "ym" before m/mh,
+  "yng" before ng/ngh, "yn" before n/nh.
+- Verb-subject-object (VSO) is the default Welsh word order.
+- Use correct verb forms: "mae" (is/are, present), "roedd" (was), "bydd" (will be),
+  "dw i" (I am), "rwyt ti" (you are), "mae e/hi" (he/she is), "maen nhw" (they are).
+- Adjectives follow the noun in Welsh.
+- Use correct preposition + pronoun fusions: "arno fe", "arni hi", "arnaf i", "gyda fi", etc.
+- "am" (about/for) causes soft mutation; "â" (with) causes aspirate mutation.
+- Do NOT conflate triggers: e.g. "gyda" does not trigger mutation; "â" does.
+- After "yn" (predicative), adjectives and nouns take soft mutation.
+- After definite article "y/yr/r", feminine singular nouns take soft mutation.
+- Proofread every sentence for correct spelling, mutations, grammar in general, and natural Welsh idiom
+  before including it. If in doubt, choose a simpler construction.
 """
 
 SENTENCES_USER = """\
@@ -202,7 +214,7 @@ class Spinner:
 
 # ── Generation ────────────────────────────────────────────────────────────────
 
-def generate(client, mode, count, existing_data):
+def generate(client, mode, count, existing_data, model="gpt-4o-mini"):
     if mode == "words":
         avoid = [w["word"] for w in existing_data][-MAX_AVOID:]
         user_prompt = WORDS_USER.format(count=count, existing=", ".join(avoid))
@@ -214,7 +226,6 @@ def generate(client, mode, count, existing_data):
         system_prompt = SENTENCES_SYSTEM
         validator = validate_sentence
 
-    model = "gpt-4o-mini"
     print(f"Requesting {count} {mode} from {model}…")
 
     response = None
@@ -284,6 +295,8 @@ def main():
     parser.add_argument("--count", type=int, default=15, help="Total items to generate (default: 15)")
     parser.add_argument("--batch-size", type=int, default=15, help="Items per API call (default: 15)")
     parser.add_argument("--dry-run", action="store_true", help="Print output without writing")
+    parser.add_argument("--model", default="gpt-4o-mini",
+                        help="OpenAI model to use (default: gpt-4o-mini; use gpt-4o for higher quality)")
     args = parser.parse_args()
 
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -317,7 +330,7 @@ def main():
 
     for batch_num, batch_count in enumerate(batches, 1):
         print(f"\n── Batch {batch_num}/{len(batches)} ({'─' * 30})")
-        batch_items = generate(client, args.mode, batch_count, seen)
+        batch_items = generate(client, args.mode, batch_count, seen, model=args.model)
         deduped = deduplicate(seen, batch_items, dedup_key)
         all_new.extend(deduped)
         seen = seen + deduped

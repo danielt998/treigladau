@@ -57,6 +57,38 @@ function Reference() {
     },
   ]
 
+  const triggers = [
+    {
+      type: 'soft',
+      items: [
+        { trigger: 'yn', note: 'predicative particle — mae hi\'n dda' },
+        { trigger: 'i, o, am, ar, at, dan, dros, drwy, heb, tan, wrth', note: 'common prepositions' },
+        { trigger: 'ei … (e/o)', note: 'his (3rd person masc. possessive)' },
+        { trigger: 'dy', note: 'your (informal 2nd person possessive)' },
+        { trigger: 'dau / dwy', note: 'two (masc. / fem.)' },
+        { trigger: 'feminine singular noun', note: 'adjective following a feminine singular noun' },
+        { trigger: 'y / yr', note: 'definite article before a feminine singular noun' },
+      ],
+    },
+    {
+      type: 'aspirate',
+      items: [
+        { trigger: 'ei … (hi)', note: 'her (3rd person fem. possessive)' },
+        { trigger: 'â / ag', note: 'with / as' },
+        { trigger: 'a', note: 'and — only before c, p, t' },
+        { trigger: 'tua', note: 'towards, about (approximation)' },
+        { trigger: 'gyda / â', note: 'â causes aspirate; gyda does not trigger mutation' },
+      ],
+    },
+    {
+      type: 'nasal',
+      items: [
+        { trigger: 'yn / ym / yng', note: 'in — assimilates: ym before m/mh, yng before ng/ngh' },
+        { trigger: 'fy', note: 'my (1st person possessive)' },
+      ],
+    },
+  ]
+
   return (
     <div className="reference">
       <h2>Rheolau Treiglo · Mutation Rules</h2>
@@ -78,6 +110,33 @@ function Reference() {
                   <tr key={from}>
                     <td><code>{from}–</code></td>
                     <td><code>{to === '∅' ? '∅ (disappears)' : `${to}–`}</code></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        ))}
+      </div>
+
+      <h2 className="ref-subtitle">Pryd i Dreiglo · When to Mutate</h2>
+      <div className="ref-tables">
+        {triggers.map(({ type, items }) => (
+          <section key={type}>
+            <span className={`badge ${type}`}>
+              {MUTATION_TYPES[type].label} · {MUTATION_TYPES[type].english}
+            </span>
+            <table>
+              <thead>
+                <tr>
+                  <th>Sbardun / Trigger</th>
+                  <th>Nodyn / Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map(({ trigger, note }) => (
+                  <tr key={trigger}>
+                    <td><code>{trigger}</code></td>
+                    <td>{note}</td>
                   </tr>
                 ))}
               </tbody>

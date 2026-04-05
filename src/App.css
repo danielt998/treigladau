@@ -218,6 +218,9 @@ button[type="submit"].next:hover { background: #005a30; }
   color: var(--red);
   margin-bottom: 1.5rem;
 }
+.reference .ref-subtitle {
+  margin-top: 2rem;
+}
 
 .ref-tables {
   display: flex;
