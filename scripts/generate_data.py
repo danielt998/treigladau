@@ -1,0 +1,259 @@
+#!/usr/bin/env python3
+"""
+Generate Welsh mutation data for Treigladau using the OpenAI API.
+
+Usage:
+    python scripts/generate_data.py words     --count 20
+    python scripts/generate_data.py sentences --count 15
+    python scripts/generate_data.py sentences --count 10 --dry-run
+
+Requires:
+    OPENAI_API_KEY environment variable (or a .env file)
+    pip install openai
+"""
+
+import argparse
+import json
+import os
+import sys
+from pathlib import Path
+
+try:
+    from openai import OpenAI
+except ImportError:
+    sys.exit("openai package not found. Run: pip install openai")
+
+ROOT = Path(__file__).parent.parent
+WORDS_FILE = ROOT / "src" / "data" / "words.json"
+SENTENCES_FILE = ROOT / "src" / "data" / "sentences.json"
+
+# ── Prompts ───────────────────────────────────────────────────────────────────
+
+WORDS_SYSTEM = """\
+You are an expert Welsh language teacher generating data for a Welsh mutation
+practice app. You have deep knowledge of Welsh grammar, including all three
+mutation types and their edge cases.
+
+Welsh mutation rules:
+  Soft (Treiglad Meddal):     p→b, t→d, c→g, b→f, d→dd, g→∅, m→f, ll→l, rh→r
+  Aspirate (Treiglad Llaes):  p→ph, t→th, c→ch
+  Nasal (Treiglad Trwynol):   p→mh, t→nh, c→ngh, b→m, d→n, g→ng
+
+Important notes:
+- Only include mutations that genuinely apply to that initial consonant.
+- Vowel-initial words and words starting with other consonants have no mutation.
+- "g" under soft mutation disappears entirely (e.g. gardd → ardd).
+- Each word object must only have keys for mutations that actually apply.
+- Use common, everyday Welsh words a learner would encounter.
+- Avoid words already in the existing list (provided below).
+"""
+
+WORDS_USER = """\
+Generate {count} Welsh words for mutation practice. Avoid these words already
+in the dataset: {existing}.
+
+Return ONLY a JSON array with no extra text, matching this schema exactly:
+[
+  {{
+    "word": "string (Welsh base form)",
+    "meaning": "string (English meaning)",
+    "mutations": {{
+      "soft": "string",      // only if initial consonant has soft mutation
+      "aspirate": "string",  // only if initial consonant has aspirate mutation
+      "nasal": "string"      // only if initial consonant has nasal mutation
+    }}
+  }}
+]
+
+Include a good mix of initial consonants (b, c, d, g, ll, m, p, rh, t).
+"""
+
+SENTENCES_SYSTEM = """\
+You are an expert Welsh language teacher generating data for a Welsh mutation
+practice app. You have deep knowledge of Welsh grammar, including all three
+mutation types, their triggers, and when mutation does NOT occur.
+
+Welsh mutation triggers include:
+  Soft:     predicative "yn", prepositions (i, o, am, ar, at, dan, dros, drwy,
+            heb, tan, wrth), "ei" (his), "dau/dwy" (two), "dy" (your-informal),
+            adjectives after feminine singular nouns
+  Aspirate: "ei" (her), "â/ag" (with/as), "a" (and) for c/p/t, "tua" (towards)
+  Nasal:    "yn/ym/yng" (in), "fy" (my)
+  None:     subject of sentence, "y/yr" (the) + masculine noun, consonants
+            with no mutation form (e.g. "m" after "fy")
+
+Important: "yn" (in) assimilates before mutations — use "ym" before m/mh,
+"yng" before ng/ngh, "yn" before n/nh.
+"""
+
+SENTENCES_USER = """\
+Generate {count} Welsh fill-in-the-blank sentences for mutation practice.
+
+Include a mix of:
+- soft mutation (various triggers)
+- aspirate mutation
+- nasal mutation
+- NO mutation (at least 3 — subject position, masculine noun after "y/yr",
+  consonants with no mutation form like "m" after "fy")
+
+Return ONLY a JSON array with no extra text, matching this schema exactly:
+[
+  {{
+    "parts": ["string before blank", "string after blank"],
+    "baseWord": "string (Welsh base form shown to learner)",
+    "meaning": "string (English meaning of baseWord)",
+    "answer": "string (correct mutated form, OR same as baseWord if no mutation)",
+    "mutationType": "soft" | "aspirate" | "nasal" | null,
+    "trigger": "short label e.g. \\"yn (predicative)\\" or \\"subject (no mutation)\\"",
+    "triggerNote": "one sentence explaining why this mutation occurs or doesn't",
+    "translation": "English translation of the full sentence"
+  }}
+]
+
+Use simple, natural Welsh sentences. Avoid repeating base words already used
+in these existing sentences: {existing}.
+"""
+
+# ── Validation ────────────────────────────────────────────────────────────────
+
+VALID_MUTATION_TYPES = {"soft", "aspirate", "nasal", None}
+
+SOFT_INITIALS     = set("bcdgm") | {"ll", "rh", "p", "t"}
+ASPIRATE_INITIALS = {"p", "t", "c"}
+NASAL_INITIALS    = {"b", "c", "d", "g", "p", "t"}
+
+def validate_word(obj):
+    assert isinstance(obj.get("word"), str) and obj["word"], "missing word"
+    assert isinstance(obj.get("meaning"), str) and obj["meaning"], "missing meaning"
+    assert isinstance(obj.get("mutations"), dict) and obj["mutations"], "missing mutations"
+    for k in obj["mutations"]:
+        assert k in ("soft", "aspirate", "nasal"), f"unknown mutation key: {k}"
+
+def validate_sentence(obj):
+    assert isinstance(obj.get("parts"), list) and len(obj["parts"]) == 2, "parts must be [before, after]"
+    assert isinstance(obj.get("baseWord"), str), "missing baseWord"
+    assert isinstance(obj.get("meaning"), str), "missing meaning"
+    assert isinstance(obj.get("answer"), str), "missing answer"
+    assert obj.get("mutationType") in VALID_MUTATION_TYPES, f"invalid mutationType: {obj.get('mutationType')}"
+    assert isinstance(obj.get("trigger"), str), "missing trigger"
+    assert isinstance(obj.get("triggerNote"), str), "missing triggerNote"
+    assert isinstance(obj.get("translation"), str), "missing translation"
+
+# ── Generation ────────────────────────────────────────────────────────────────
+
+def generate(client, mode, count, existing_data):
+    if mode == "words":
+        existing_words = [w["word"] for w in existing_data]
+        user_prompt = WORDS_USER.format(count=count, existing=", ".join(existing_words))
+        system_prompt = WORDS_SYSTEM
+        validator = validate_word
+    else:
+        existing_words = [s["baseWord"] for s in existing_data]
+        user_prompt = SENTENCES_USER.format(count=count, existing=", ".join(existing_words))
+        system_prompt = SENTENCES_SYSTEM
+        validator = validate_sentence
+
+    print(f"Calling OpenAI API (requesting {count} {mode})…")
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user",   "content": user_prompt},
+        ],
+        temperature=0.7,
+        response_format={"type": "json_object"},
+    )
+
+    raw = response.choices[0].message.content
+    # GPT may wrap the array in an object — unwrap it
+    parsed = json.loads(raw)
+    if isinstance(parsed, dict):
+        # Find the first list value
+        for v in parsed.values():
+            if isinstance(v, list):
+                parsed = v
+                break
+
+    if not isinstance(parsed, list):
+        sys.exit(f"Unexpected response shape: {type(parsed)}")
+
+    valid, errors = [], []
+    for i, obj in enumerate(parsed):
+        try:
+            validator(obj)
+            valid.append(obj)
+        except AssertionError as e:
+            errors.append(f"  item {i}: {e}")
+
+    if errors:
+        print(f"⚠️  {len(errors)} item(s) failed validation and were skipped:")
+        for err in errors:
+            print(err)
+
+    return valid
+
+
+def deduplicate(existing, new_items, key):
+    existing_keys = {item[key] for item in existing}
+    added = [item for item in new_items if item[key] not in existing_keys]
+    skipped = len(new_items) - len(added)
+    if skipped:
+        print(f"  Skipped {skipped} duplicate(s).")
+    return added
+
+
+# ── CLI ───────────────────────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser(description="Generate Welsh mutation data")
+    parser.add_argument("mode", choices=["words", "sentences"])
+    parser.add_argument("--count", type=int, default=15, help="Items to generate (default: 15)")
+    parser.add_argument("--dry-run", action="store_true", help="Print output without writing")
+    args = parser.parse_args()
+
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        # Try loading from .env in project root
+        env_file = ROOT / ".env"
+        if env_file.exists():
+            for line in env_file.read_text().splitlines():
+                if line.startswith("OPENAI_API_KEY="):
+                    api_key = line.split("=", 1)[1].strip().strip('"')
+    if not api_key:
+        sys.exit("Set OPENAI_API_KEY as an environment variable or in a .env file.")
+
+    client = OpenAI(api_key=api_key)
+
+    target_file = WORDS_FILE if args.mode == "words" else SENTENCES_FILE
+    existing = json.loads(target_file.read_text())
+
+    new_items = generate(client, args.mode, args.count, existing)
+    print(f"✓ {len(new_items)} valid item(s) generated.")
+
+    dedup_key = "word" if args.mode == "words" else "baseWord"
+    to_add = deduplicate(existing, new_items, dedup_key)
+
+    print(f"\n{'─'*50}")
+    print(json.dumps(to_add, ensure_ascii=False, indent=2))
+    print(f"{'─'*50}\n")
+
+    if not to_add:
+        print("Nothing new to add.")
+        return
+
+    if args.dry_run:
+        print(f"Dry run — would add {len(to_add)} item(s) to {target_file.name}.")
+        return
+
+    answer = input(f"Add {len(to_add)} item(s) to {target_file.name}? [y/N] ").strip().lower()
+    if answer != "y":
+        print("Aborted.")
+        return
+
+    merged = existing + to_add
+    target_file.write_text(json.dumps(merged, ensure_ascii=False, indent=2) + "\n")
+    print(f"✓ {target_file.name} updated ({len(existing)} → {len(merged)} items).")
+
+
+if __name__ == "__main__":
+    main()
