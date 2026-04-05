@@ -254,8 +254,7 @@ function ContextQuiz() {
       </div>
 
       <div className={`q-card${feedback ? ` ${feedback}` : ''}`}>
-        <form onSubmit={handleSubmit}>
-          {/* Sentence with inline input */}
+        <form onSubmit={handleSubmit} className="ctx-form">
           <p className="ctx-sentence">
             <span>{sentence.parts[0]}</span>
             <input

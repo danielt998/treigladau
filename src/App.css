@@ -309,3 +309,9 @@ tr:last-child td { border-bottom: none; }
 }
 
 .badge.no-mut { background: #757575; }
+
+.ctx-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
