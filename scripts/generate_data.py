@@ -15,6 +15,7 @@ Requires:
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -118,26 +119,53 @@ in these existing sentences: {existing}.
 
 VALID_MUTATION_TYPES = {"soft", "aspirate", "nasal", None}
 
-SOFT_INITIALS     = set("bcdgm") | {"ll", "rh", "p", "t"}
-ASPIRATE_INITIALS = {"p", "t", "c"}
-NASAL_INITIALS    = {"b", "c", "d", "g", "p", "t"}
+PLACEHOLDER_RE = re.compile(r'_{2,}|\[.*?\]|___+|\{[^}]+\}')
+
+def fix_parts(obj):
+    """If GPT returned parts as a single string with a placeholder, split it."""
+    parts = obj.get("parts")
+    if isinstance(parts, list) and len(parts) == 2:
+        return obj
+    if isinstance(parts, str):
+        m = PLACEHOLDER_RE.search(parts)
+        if m:
+            obj["parts"] = [parts[:m.start()], parts[m.end():]]
+            return obj
+    return obj
 
 def validate_word(obj):
-    assert isinstance(obj.get("word"), str) and obj["word"], "missing word"
-    assert isinstance(obj.get("meaning"), str) and obj["meaning"], "missing meaning"
-    assert isinstance(obj.get("mutations"), dict) and obj["mutations"], "missing mutations"
+    if not isinstance(obj, dict):
+        raise ValueError(f"expected dict, got {type(obj).__name__}")
+    if not isinstance(obj.get("word"), str) or not obj["word"]:
+        raise ValueError("missing word")
+    if not isinstance(obj.get("meaning"), str) or not obj["meaning"]:
+        raise ValueError("missing meaning")
+    if not isinstance(obj.get("mutations"), dict) or not obj["mutations"]:
+        raise ValueError("missing mutations")
     for k in obj["mutations"]:
-        assert k in ("soft", "aspirate", "nasal"), f"unknown mutation key: {k}"
+        if k not in ("soft", "aspirate", "nasal"):
+            raise ValueError(f"unknown mutation key: {k}")
 
 def validate_sentence(obj):
-    assert isinstance(obj.get("parts"), list) and len(obj["parts"]) == 2, "parts must be [before, after]"
-    assert isinstance(obj.get("baseWord"), str), "missing baseWord"
-    assert isinstance(obj.get("meaning"), str), "missing meaning"
-    assert isinstance(obj.get("answer"), str), "missing answer"
-    assert obj.get("mutationType") in VALID_MUTATION_TYPES, f"invalid mutationType: {obj.get('mutationType')}"
-    assert isinstance(obj.get("trigger"), str), "missing trigger"
-    assert isinstance(obj.get("triggerNote"), str), "missing triggerNote"
-    assert isinstance(obj.get("translation"), str), "missing translation"
+    if not isinstance(obj, dict):
+        raise ValueError(f"expected dict, got {type(obj).__name__}")
+    obj = fix_parts(obj)
+    if not (isinstance(obj.get("parts"), list) and len(obj["parts"]) == 2):
+        raise ValueError(f"parts must be [before, after], got: {obj.get('parts')!r}")
+    if not isinstance(obj.get("baseWord"), str):
+        raise ValueError("missing baseWord")
+    if not isinstance(obj.get("meaning"), str):
+        raise ValueError("missing meaning")
+    if not isinstance(obj.get("answer"), str):
+        raise ValueError("missing answer")
+    if obj.get("mutationType") not in VALID_MUTATION_TYPES:
+        raise ValueError(f"invalid mutationType: {obj.get('mutationType')!r}")
+    if not isinstance(obj.get("trigger"), str):
+        raise ValueError("missing trigger")
+    if not isinstance(obj.get("triggerNote"), str):
+        raise ValueError("missing triggerNote")
+    if not isinstance(obj.get("translation"), str):
+        raise ValueError("missing translation")
 
 # ── Generation ────────────────────────────────────────────────────────────────
 
@@ -182,7 +210,7 @@ def generate(client, mode, count, existing_data):
         try:
             validator(obj)
             valid.append(obj)
-        except AssertionError as e:
+        except Exception as e:
             errors.append(f"  item {i}: {e}")
 
     if errors:
