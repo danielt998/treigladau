@@ -17,6 +17,8 @@ import json
 import os
 import re
 import sys
+import threading
+import time
 from pathlib import Path
 
 try:
@@ -167,6 +169,33 @@ def validate_sentence(obj):
     if not isinstance(obj.get("translation"), str):
         raise ValueError("missing translation")
 
+# ── Spinner ───────────────────────────────────────────────────────────────────
+
+class Spinner:
+    FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+    def __init__(self, message):
+        self.message = message
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._spin, daemon=True)
+
+    def _spin(self):
+        i = 0
+        while not self._stop.is_set():
+            print(f"\r{self.FRAMES[i % len(self.FRAMES)]}  {self.message}", end="", flush=True)
+            i += 1
+            time.sleep(0.08)
+
+    def __enter__(self):
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_):
+        self._stop.set()
+        self._thread.join()
+        print("\r", end="", flush=True)  # clear the spinner line
+
+
 # ── Generation ────────────────────────────────────────────────────────────────
 
 def generate(client, mode, count, existing_data):
@@ -181,17 +210,20 @@ def generate(client, mode, count, existing_data):
         system_prompt = SENTENCES_SYSTEM
         validator = validate_sentence
 
-    print(f"Calling OpenAI API (requesting {count} {mode})…")
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user",   "content": user_prompt},
-        ],
-        temperature=0.7,
-    )
+    model = "gpt-4o-mini"
+    print(f"Requesting {count} {mode} from {model}…")
+    with Spinner("Waiting for API response"):
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": user_prompt},
+            ],
+            temperature=0.7,
+        )
 
     raw = response.choices[0].message.content
+    print(f"✓ Response received ({len(raw)} chars). Parsing…")
 
     # Extract the JSON array from the response (handles markdown code fences too)
     match = re.search(r'\[.*\]', raw, re.DOTALL)
@@ -202,19 +234,19 @@ def generate(client, mode, count, existing_data):
     except json.JSONDecodeError as e:
         sys.exit(f"Failed to parse JSON: {e}\n\nRaw response:\n{raw}")
 
+    print(f"  {len(parsed)} item(s) found. Validating…")
     valid, errors = [], []
     for i, obj in enumerate(parsed):
+        label = obj.get("word") or obj.get("baseWord") or f"item {i}"
         try:
             validator(obj)
             valid.append(obj)
+            print(f"  [{i+1:>2}/{len(parsed)}] ✓  {label}")
         except Exception as e:
-            errors.append(f"  item {i}: {e}")
+            errors.append(f"  item {i} ({label}): {e}")
+            print(f"  [{i+1:>2}/{len(parsed)}] ✗  {label} — {e}")
 
-    if errors:
-        print(f"⚠️  {len(errors)} item(s) failed validation and were skipped:")
-        for err in errors:
-            print(err)
-
+    print(f"\n✓ {len(valid)} valid, {len(errors)} skipped.")
     return valid
 
 
