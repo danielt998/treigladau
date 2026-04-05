@@ -189,21 +189,18 @@ def generate(client, mode, count, existing_data):
             {"role": "user",   "content": user_prompt},
         ],
         temperature=0.7,
-        response_format={"type": "json_object"},
     )
 
     raw = response.choices[0].message.content
-    # GPT may wrap the array in an object — unwrap it
-    parsed = json.loads(raw)
-    if isinstance(parsed, dict):
-        # Find the first list value
-        for v in parsed.values():
-            if isinstance(v, list):
-                parsed = v
-                break
 
-    if not isinstance(parsed, list):
-        sys.exit(f"Unexpected response shape: {type(parsed)}")
+    # Extract the JSON array from the response (handles markdown code fences too)
+    match = re.search(r'\[.*\]', raw, re.DOTALL)
+    if not match:
+        sys.exit(f"No JSON array found in response:\n{raw}")
+    try:
+        parsed = json.loads(match.group())
+    except json.JSONDecodeError as e:
+        sys.exit(f"Failed to parse JSON: {e}\n\nRaw response:\n{raw}")
 
     valid, errors = [], []
     for i, obj in enumerate(parsed):
