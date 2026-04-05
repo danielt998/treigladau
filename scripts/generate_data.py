@@ -264,7 +264,8 @@ def deduplicate(existing, new_items, key):
 def main():
     parser = argparse.ArgumentParser(description="Generate Welsh mutation data")
     parser.add_argument("mode", choices=["words", "sentences"])
-    parser.add_argument("--count", type=int, default=15, help="Items to generate (default: 15)")
+    parser.add_argument("--count", type=int, default=15, help="Total items to generate (default: 15)")
+    parser.add_argument("--batch-size", type=int, default=15, help="Items per API call (default: 15)")
     parser.add_argument("--dry-run", action="store_true", help="Print output without writing")
     args = parser.parse_args()
 
@@ -283,31 +284,44 @@ def main():
 
     target_file = WORDS_FILE if args.mode == "words" else SENTENCES_FILE
     existing = json.loads(target_file.read_text())
-
-    new_items = generate(client, args.mode, args.count, existing)
-    print(f"✓ {len(new_items)} valid item(s) generated.")
-
     dedup_key = "word" if args.mode == "words" else "baseWord"
-    to_add = deduplicate(existing, new_items, dedup_key)
+
+    # Split into batches
+    batches = []
+    remaining = args.count
+    while remaining > 0:
+        batches.append(min(remaining, args.batch_size))
+        remaining -= args.batch_size
+
+    all_new = []
+    # Pass a growing "seen" list to each batch so it avoids duplicating across batches too
+    seen = list(existing)
+
+    for batch_num, batch_count in enumerate(batches, 1):
+        print(f"\n── Batch {batch_num}/{len(batches)} ({'─' * 30})")
+        batch_items = generate(client, args.mode, batch_count, seen)
+        deduped = deduplicate(seen, batch_items, dedup_key)
+        all_new.extend(deduped)
+        seen = seen + deduped  # keep future batches aware of what we've already got
 
     print(f"\n{'─'*50}")
-    print(json.dumps(to_add, ensure_ascii=False, indent=2))
+    print(json.dumps(all_new, ensure_ascii=False, indent=2))
     print(f"{'─'*50}\n")
 
-    if not to_add:
+    if not all_new:
         print("Nothing new to add.")
         return
 
     if args.dry_run:
-        print(f"Dry run — would add {len(to_add)} item(s) to {target_file.name}.")
+        print(f"Dry run — would add {len(all_new)} item(s) to {target_file.name}.")
         return
 
-    answer = input(f"Add {len(to_add)} item(s) to {target_file.name}? [y/N] ").strip().lower()
+    answer = input(f"Add {len(all_new)} item(s) to {target_file.name}? [y/N] ").strip().lower()
     if answer != "y":
         print("Aborted.")
         return
 
-    merged = existing + to_add
+    merged = existing + all_new
     target_file.write_text(json.dumps(merged, ensure_ascii=False, indent=2) + "\n")
     print(f"✓ {target_file.name} updated ({len(existing)} → {len(merged)} items).")
 
