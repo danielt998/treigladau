@@ -183,7 +183,7 @@ def generate(client, mode, count, existing_data):
 
     print(f"Calling OpenAI API (requesting {count} {mode})…")
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user",   "content": user_prompt},
