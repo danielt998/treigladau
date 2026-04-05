@@ -53,7 +53,7 @@
   },
   {
     "parts": [
-      "Aethon ni i ",
+      "Aethon ni i'r ",
       "."
     ],
     "baseWord": "tref",
@@ -61,8 +61,8 @@
     "answer": "dref",
     "mutationType": "soft",
     "trigger": "i (preposition)",
-    "triggerNote": "The preposition \"i\" (to) triggers soft mutation on the following word.",
-    "translation": "We went to town."
+    "triggerNote": "The preposition \"i\" (to) triggers soft mutation. \"tref\" (feminine) also mutates after the definite article \"i'r\" — both triggers give the same result: \"dref\".",
+    "translation": "We went to the town."
   },
   {
     "parts": [
@@ -84,10 +84,10 @@
     ],
     "baseWord": "bwrdd",
     "meaning": "table",
-    "answer": "fwrdd",
-    "mutationType": "soft",
-    "trigger": "ar (preposition)",
-    "triggerNote": "The preposition \"ar\" (on) triggers soft mutation.",
+    "answer": "bwrdd",
+    "mutationType": null,
+    "trigger": "ar y + masculine noun (no mutation)",
+    "triggerNote": "\"Ar\" triggers soft mutation on the word immediately after it, but here \"y\" (the definite article) intervenes. Masculine nouns after \"y\" do not mutate, so \"bwrdd\" stays unchanged.",
     "translation": "The book is on the table."
   },
   {
@@ -99,8 +99,8 @@
     "meaning": "journey",
     "answer": "daith",
     "mutationType": "soft",
-    "trigger": "am (preposition)",
-    "triggerNote": "The preposition \"am\" (about) triggers soft mutation.",
+    "trigger": "y (definite article, feminine noun)",
+    "triggerNote": "\"Taith\" is a feminine noun, so it takes soft mutation after the definite article \"y\". (Note: \"am\" would also trigger soft mutation if the noun followed directly — \"am daith\" — but here \"y\" is what immediately precedes the noun.)",
     "translation": "Did you talk about the journey?"
   },
   {
@@ -300,8 +300,8 @@
   },
   {
     "parts": [
-      "Fy ",
-      " sy'n dda."
+      "Mae fy ",
+      " yn dda."
     ],
     "baseWord": "mam",
     "meaning": "mother",
