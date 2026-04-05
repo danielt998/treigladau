@@ -157,13 +157,15 @@ function Quiz() {
   const [score, setScore] = useState({ correct: 0, total: 0 })
   const [streak, setStreak] = useState(0)
   const inputRef = useRef(null)
+  const buttonRef = useRef(null)
 
   const wordObj = words[question.wordIndex]
   const correctAnswer = wordObj.mutations[question.mutationType]
   const mutInfo = MUTATION_TYPES[question.mutationType]
 
   useEffect(() => {
-    if (!feedback) inputRef.current?.focus()
+    if (feedback) buttonRef.current?.focus()
+    else inputRef.current?.focus()
   }, [feedback, question])
 
   const next = () => {
@@ -246,7 +248,7 @@ function Quiz() {
             autoCorrect="off"
             spellCheck="false"
           />
-          <button type="submit" className={feedback ? 'next' : ''}>
+          <button ref={buttonRef} type="submit" className={feedback ? 'next' : ''}>
             {feedback ? 'Nesaf →' : 'Gwirio ✓'}
           </button>
         </form>
@@ -272,11 +274,13 @@ function ContextQuiz() {
   const [score, setScore] = useState({ correct: 0, total: 0 })
   const [streak, setStreak] = useState(0)
   const inputRef = useRef(null)
+  const buttonRef = useRef(null)
 
   const sentence = sentences[idx]
 
   useEffect(() => {
-    if (!feedback) inputRef.current?.focus()
+    if (feedback) buttonRef.current?.focus()
+    else inputRef.current?.focus()
   }, [feedback, idx])
 
   const next = () => {
@@ -342,7 +346,7 @@ function ContextQuiz() {
             <span className="meaning">({sentence.meaning})</span>
           </p>
 
-          <button type="submit" className={feedback ? 'next' : ''}>
+          <button ref={buttonRef} type="submit" className={feedback ? 'next' : ''}>
             {feedback ? 'Nesaf →' : 'Gwirio ✓'}
           </button>
         </form>
