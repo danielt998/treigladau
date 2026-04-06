@@ -101,8 +101,25 @@ Important grammar rules:
 - Do NOT conflate triggers: e.g. "gyda" does not trigger mutation; "â" does.
 - After "yn" (predicative), adjectives and nouns take soft mutation.
 - After definite article "y/yr/r", feminine singular nouns take soft mutation.
+- When a preposition is followed by "y/yr" (the definite article) and a masculine noun,
+  the preposition's mutation is BLOCKED by the article — the noun does not mutate.
+  e.g. "ar y bwrdd" (bwrdd is masculine → no mutation), NOT "ar y fwrdd".
+- Prepositions contract with "y/yr": i + yr → i'r, o + yr → o'r, etc.
+  Always use the contracted form, e.g. "aethon ni i'r dref" not "aethon ni i dref".
 - Proofread every sentence for correct spelling, mutations, grammar in general, and natural Welsh idiom
   before including it. If in doubt, choose a simpler construction.
+
+Naturalness rules — this is critical:
+- Write sentences that a Welsh speaker would actually say, NOT word-for-word
+  translations of English phrases. Ask yourself: would a Welsh speaker say this?
+- Welsh often uses different idioms from English. Prefer idiomatic Welsh over
+  translated English: e.g. "mae eisiau bwyd arna i" not "dw i eisiau bwyd",
+  "mae'n bwrw glaw" not "mae'n glawio", "mynd am dro" not "mynd am walk".
+- Always use the definite article where Welsh requires it — Welsh uses "y/yr/r"
+  in many places English omits "the" (e.g. locations, institutions, body parts).
+- Avoid sentences that are transparently mapped from an English template.
+  Bad: "Mae [person] yn [verb] [object]." where the Welsh is just English word order.
+  Good: sentences with idiomatic Welsh preposition use, verb-noun constructions, etc.
 """
 
 SENTENCES_USER = """\
@@ -129,8 +146,8 @@ Return ONLY a JSON array with no extra text, matching this schema exactly:
   }}
 ]
 
-Use simple, natural Welsh sentences. Avoid repeating base words already used
-in these existing sentences: {existing}.
+Use simple, natural, idiomatic Welsh sentences — not translations of English.
+Avoid repeating base words already used in these existing sentences: {existing}.
 """
 
 # ── Validation ────────────────────────────────────────────────────────────────
