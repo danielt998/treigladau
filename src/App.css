@@ -85,6 +85,7 @@ nav button:not(.active):hover { background: #fff5f5; }
 .badge.preposition { background: #8d6e63; }
 .badge.gender { background: #ef6c00; }
 .badge.plural { background: #546e7a; }
+.badge.dialogue { background: #7b1fa2; }
 
 /* ── Quiz: filters ───────────────────────────────────────────────────────── */
 .filter-bar {
@@ -112,6 +113,7 @@ nav button:not(.active):hover { background: #fff5f5; }
 .filter-btn.preposition { color: #8d6e63; border-color: #8d6e63; }
 .filter-btn.gender { color: #ef6c00; border-color: #ef6c00; }
 .filter-btn.plural { color: #546e7a; border-color: #546e7a; }
+.filter-btn.dialogue { color: #7b1fa2; border-color: #7b1fa2; }
 
 .filter-btn.all.active      { background: #555;           color: white; border-color: #555; }
 .filter-btn.soft.active     { background: var(--soft);    color: white; }
@@ -120,6 +122,7 @@ nav button:not(.active):hover { background: #fff5f5; }
 .filter-btn.preposition.active { background: #8d6e63; color: white; border-color: #8d6e63; }
 .filter-btn.gender.active { background: #ef6c00; color: white; border-color: #ef6c00; }
 .filter-btn.plural.active { background: #546e7a; color: white; border-color: #546e7a; }
+.filter-btn.dialogue.active { background: #7b1fa2; color: white; border-color: #7b1fa2; }
 
 /* ── Quiz: score row ─────────────────────────────────────────────────────── */
 .score-bar {
@@ -167,6 +170,23 @@ nav button:not(.active):hover { background: #fff5f5; }
 
 .prep-meta {
   font-size: 0.95rem;
+}
+
+.dialogue-line,
+.dialogue-cue {
+  margin: 0;
+}
+
+.dialogue-line {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.dialogue-cue {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--red);
 }
 
 .ref-note {
@@ -433,10 +453,33 @@ button[type="submit"].next:hover { background: #005a30; }
   flex-wrap: wrap;
 }
 
+.practice-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.mini-badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: #f1ece6;
+  color: #5f5147;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .recent-item {
   display: flex;
   gap: 0.75rem;
   align-items: flex-start;
+}
+
+.recent-body {
+  flex: 1;
+  min-width: 0;
 }
 
 .recent-item.correct {

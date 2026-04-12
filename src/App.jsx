@@ -4,6 +4,7 @@ import words from './data/words.json'
 import sentences from './data/sentences.json'
 import { PREPOSITION_SETS, PREPOSITION_ITEMS } from './data/prepositions'
 import { GENDER_OPTIONS, NOUNS, PLURAL_PATTERNS } from './data/nouns'
+import { SHORT_ANSWER_SETS, SHORT_ANSWER_ITEMS } from './data/shortAnswers'
 import './App.css'
 
 const STORAGE_KEY = 'treigladau-progress-v1'
@@ -28,6 +29,19 @@ const SPECIAL_TOPIC_META = {
     label: 'Lluosog',
     english: 'Plural',
   },
+  dialogue: {
+    key: 'dialogue',
+    label: 'Ateb Byr',
+    english: 'Short Answer',
+  },
+}
+const MODE_META = {
+  quiz: 'Mutation',
+  context: 'Context',
+  preposition: 'Preposition',
+  gender: 'Gender',
+  plural: 'Plural',
+  dialogue: 'Short Answer',
 }
 
 // Accept answers that differ only in Welsh diacritics (ŵ→w, ŷ→y, etc.)
@@ -118,6 +132,10 @@ function sentencePrompt(parts) {
   return `${parts[0]}____${parts[1]}`
 }
 
+function getModeLabel(mode) {
+  return MODE_META[mode] ?? 'Practice'
+}
+
 function normalizeAnswer(str) {
   return normalizeWelsh(str).replace(/\s+/g, ' ').trim()
 }
@@ -145,6 +163,15 @@ function pickNoun(prev = null, filter = 'all', mode = 'gender') {
   })
   const available = prev
     ? pool.filter(noun => noun.id !== prev.id)
+    : pool
+  const source = available.length ? available : pool
+  return source[Math.floor(Math.random() * source.length)]
+}
+
+function pickShortAnswer(prev = null, filter = 'all') {
+  const pool = SHORT_ANSWER_ITEMS.filter(item => filter === 'all' || item.familyKey === filter)
+  const available = prev
+    ? pool.filter(item => item.id !== prev.id)
     : pool
   const source = available.length ? available : pool
   return source[Math.floor(Math.random() * source.length)]
@@ -440,6 +467,32 @@ function Reference() {
             </tbody>
           </table>
         </section>
+      </div>
+
+      <h2 className="ref-subtitle">Atebion Byr · Short Answers</h2>
+      <div className="ref-tables">
+        {SHORT_ANSWER_SETS.map(set => (
+          <section key={set.key}>
+            <span className="badge dialogue">
+              {set.label}
+            </span>
+            <table>
+              <thead>
+                <tr>
+                  <th>Yes</th>
+                  <th>No</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>{set.yesForm}</code></td>
+                  <td><code>{set.noForm}</code></td>
+                </tr>
+              </tbody>
+            </table>
+            <p className="ref-note">{set.note}</p>
+          </section>
+        ))}
       </div>
     </div>
   )
@@ -1143,6 +1196,147 @@ function PluralPractice({ progress, recordAttempt }) {
   )
 }
 
+function ShortAnswerPractice({ progress, recordAttempt }) {
+  const [filter, setFilter] = useState('all')
+  const [question, setQuestion] = useState(() => pickShortAnswer(null, 'all'))
+  const [input, setInput] = useState('')
+  const [feedback, setFeedback] = useState(null)
+  const [score, setScore] = useState({ correct: 0, total: 0 })
+  const [streak, setStreak] = useState(0)
+  const inputRef = useRef(null)
+  const buttonRef = useRef(null)
+
+  const itemId = `dialogue:${question.id}`
+  const itemRecord = progress.items[itemId]
+  const familyRecord = progress.byTrigger[question.familyLabel]
+
+  useEffect(() => {
+    if (feedback) buttonRef.current?.focus()
+    else inputRef.current?.focus()
+  }, [feedback, question])
+
+  const next = () => {
+    setQuestion(pickShortAnswer(question, filter))
+    setInput('')
+    setFeedback(null)
+  }
+
+  const handleSubmit = e => {
+    e.preventDefault()
+    if (feedback) { next(); return }
+
+    const trimmedInput = input.trim()
+    const correct = matchesAnswer(trimmedInput, question.acceptedAnswers)
+
+    setFeedback(correct ? 'correct' : 'incorrect')
+    setScore(s => ({ correct: s.correct + (correct ? 1 : 0), total: s.total + 1 }))
+    setStreak(s => correct ? s + 1 : 0)
+    recordAttempt({
+      id: itemId,
+      mode: 'dialogue',
+      label: `${question.familyLabel} · ${question.replyCue}`,
+      prompt: question.question,
+      answer: question.answer,
+      input: trimmedInput,
+      correct,
+      mutationType: 'dialogue',
+      trigger: question.familyLabel,
+      hint: question.translation,
+      seenAt: new Date().toISOString(),
+    })
+  }
+
+  const applyFilter = nextFilter => {
+    setFilter(nextFilter)
+    setQuestion(pickShortAnswer(null, nextFilter))
+    setInput('')
+    setFeedback(null)
+    setScore({ correct: 0, total: 0 })
+    setStreak(0)
+  }
+
+  const pct = score.total > 0 ? Math.round((score.correct / score.total) * 100) : null
+
+  return (
+    <div className="quiz">
+      <div className="filter-bar">
+        <button
+          className={`filter-btn all${filter === 'all' ? ' active' : ''}`}
+          onClick={() => applyFilter('all')}
+        >
+          Pob un · All
+        </button>
+        {SHORT_ANSWER_SETS.map(set => (
+          <button
+            key={set.key}
+            className={`filter-btn dialogue${filter === set.key ? ' active' : ''}`}
+            onClick={() => applyFilter(set.key)}
+          >
+            {set.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="score-bar">
+        {score.total > 0 && (
+          <>
+            <span className="score">{score.correct}/{score.total}</span>
+            <span className="pct">{pct}%</span>
+          </>
+        )}
+        {streak >= 3 && <span className="streak">🔥 {streak}</span>}
+      </div>
+
+      <div className={`q-card${feedback ? ` ${feedback}` : ''}`}>
+        <span className="badge dialogue">
+          Atebion Byr · Short Answers
+        </span>
+
+        <div className="prep-prompt">
+          <p className="dialogue-line">{question.question}</p>
+          <p className="ctx-translation">{question.translation}</p>
+          <p className="dialogue-cue">{question.replyCue}</p>
+        </div>
+
+        <CurrentRecord label="Record for this prompt" stats={itemRecord} />
+        <CurrentRecord label="Short-answer pattern" stats={familyRecord} />
+
+        <form onSubmit={handleSubmit}>
+          <input
+            ref={inputRef}
+            type="text"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder="Teipiwch yr ateb byr…"
+            disabled={!!feedback}
+            className={feedback || ''}
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck="false"
+          />
+          <button ref={buttonRef} type="submit" className={feedback ? 'next' : ''}>
+            {feedback ? 'Nesaf →' : 'Gwirio ✓'}
+          </button>
+        </form>
+
+        {feedback && (
+          <div className={`feedback ${feedback}`}>
+            <p>
+              {feedback === 'correct'
+                ? <>✓ Cywir! — <strong>{question.answer}</strong></>
+                : <>✗ Anghywir — yr ateb yw <strong>{question.answer}</strong></>}
+            </p>
+            <div className="trigger-block">
+              <span className="badge dialogue">{question.familyLabel.replace('Short answers: ', '')}</span>
+              <p className="trigger-note">{question.note}</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function ProgressView({ progress, onReset }) {
   const mutationRows = Object.entries(progress.byMutationType)
     .sort(([, a], [, b]) => (b.total - a.total) || (a.correct / a.total) - (b.correct / b.total))
@@ -1163,7 +1357,7 @@ function ProgressView({ progress, onReset }) {
           <div>
             <h2>Cofnod Dysgu · Learning Record</h2>
             <p className="progress-copy">
-              This is saved in your browser, so mutation cards, sentence prompts, preposition patterns, and noun drills build up over time.
+              This is saved in your browser, so mutation cards, sentence prompts, preposition patterns, noun drills, and dialogue practice build up over time.
             </p>
           </div>
           {progress.total.total > 0 && (
@@ -1260,14 +1454,18 @@ function ProgressView({ progress, onReset }) {
                   <div className="practice-list">
                     {practiceItems.map(item => {
                       const meta = getMutationMeta(item.mutationType)
+                      const modeLabel = getModeLabel(item.mode)
 
                       return (
                         <article key={item.id} className="practice-item">
                           <div className="practice-head">
                             <strong>{item.prompt}</strong>
-                            <span className={`badge ${meta.key === 'none' ? 'no-mut' : meta.key}`}>
-                              {meta.english}
-                            </span>
+                            <div className="practice-badges">
+                              <span className="mini-badge">{modeLabel}</span>
+                              <span className={`badge ${meta.key === 'none' ? 'no-mut' : meta.key}`}>
+                                {meta.english}
+                              </span>
+                            </div>
                           </div>
                           <p>{item.label}</p>
                           <p>
@@ -1283,17 +1481,24 @@ function ProgressView({ progress, onReset }) {
               <section className="progress-section">
                 <h3>Recent attempts</h3>
                 <div className="recent-list">
-                  {recent.map(entry => (
-                    <article key={`${entry.id}:${entry.seenAt}`} className={`recent-item ${entry.correct ? 'correct' : 'incorrect'}`}>
-                      <div className="recent-result">{entry.correct ? '✓' : '✗'}</div>
-                      <div>
-                        <strong>{entry.prompt}</strong>
-                        <p>
-                          You typed <code>{entry.input || '—'}</code> · answer <code>{entry.answer}</code>
-                        </p>
-                      </div>
-                    </article>
-                  ))}
+                  {recent.map(entry => {
+                    const modeLabel = getModeLabel(entry.mode)
+
+                    return (
+                      <article key={`${entry.id}:${entry.seenAt}`} className={`recent-item ${entry.correct ? 'correct' : 'incorrect'}`}>
+                        <div className="recent-result">{entry.correct ? '✓' : '✗'}</div>
+                        <div className="recent-body">
+                          <div className="practice-head">
+                            <strong>{entry.prompt}</strong>
+                            <span className="mini-badge">{modeLabel}</span>
+                          </div>
+                          <p>
+                            You typed <code>{entry.input || '—'}</code> · answer <code>{entry.answer}</code>
+                          </p>
+                        </div>
+                      </article>
+                    )
+                  })}
                 </div>
               </section>
             </div>
@@ -1334,6 +1539,9 @@ export default function App() {
         <button className={tab === 'plurals' ? 'active' : ''} onClick={() => setTab('plurals')}>
           Lluosogion · Plurals
         </button>
+        <button className={tab === 'dialogue' ? 'active' : ''} onClick={() => setTab('dialogue')}>
+          Atebion Byr · Dialogue
+        </button>
         <button className={tab === 'progress' ? 'active' : ''} onClick={() => setTab('progress')}>
           Cofnod · Progress
         </button>
@@ -1348,6 +1556,7 @@ export default function App() {
         {tab === 'prepositions' && <PrepositionPractice progress={progress} recordAttempt={recordAttempt} />}
         {tab === 'gender'    && <GenderPractice progress={progress} recordAttempt={recordAttempt} />}
         {tab === 'plurals'   && <PluralPractice progress={progress} recordAttempt={recordAttempt} />}
+        {tab === 'dialogue'  && <ShortAnswerPractice progress={progress} recordAttempt={recordAttempt} />}
         {tab === 'progress'  && <ProgressView progress={progress} onReset={resetProgress} />}
         {tab === 'reference' && <Reference />}
       </main>
