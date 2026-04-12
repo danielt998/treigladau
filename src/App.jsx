@@ -29,6 +29,13 @@ const SPECIAL_TOPIC_META = {
     english: 'Plural',
   },
 }
+const MODE_META = {
+  quiz: 'Mutation',
+  context: 'Context',
+  preposition: 'Preposition',
+  gender: 'Gender',
+  plural: 'Plural',
+}
 
 // Accept answers that differ only in Welsh diacritics (ŵ→w, ŷ→y, etc.)
 function normalizeWelsh(str) {
@@ -116,6 +123,10 @@ function getMutationMeta(type) {
 
 function sentencePrompt(parts) {
   return `${parts[0]}____${parts[1]}`
+}
+
+function getModeLabel(mode) {
+  return MODE_META[mode] ?? 'Practice'
 }
 
 function normalizeAnswer(str) {
@@ -1260,14 +1271,18 @@ function ProgressView({ progress, onReset }) {
                   <div className="practice-list">
                     {practiceItems.map(item => {
                       const meta = getMutationMeta(item.mutationType)
+                      const modeLabel = getModeLabel(item.mode)
 
                       return (
                         <article key={item.id} className="practice-item">
                           <div className="practice-head">
                             <strong>{item.prompt}</strong>
-                            <span className={`badge ${meta.key === 'none' ? 'no-mut' : meta.key}`}>
-                              {meta.english}
-                            </span>
+                            <div className="practice-badges">
+                              <span className="mini-badge">{modeLabel}</span>
+                              <span className={`badge ${meta.key === 'none' ? 'no-mut' : meta.key}`}>
+                                {meta.english}
+                              </span>
+                            </div>
                           </div>
                           <p>{item.label}</p>
                           <p>
@@ -1283,17 +1298,24 @@ function ProgressView({ progress, onReset }) {
               <section className="progress-section">
                 <h3>Recent attempts</h3>
                 <div className="recent-list">
-                  {recent.map(entry => (
-                    <article key={`${entry.id}:${entry.seenAt}`} className={`recent-item ${entry.correct ? 'correct' : 'incorrect'}`}>
-                      <div className="recent-result">{entry.correct ? '✓' : '✗'}</div>
-                      <div>
-                        <strong>{entry.prompt}</strong>
-                        <p>
-                          You typed <code>{entry.input || '—'}</code> · answer <code>{entry.answer}</code>
-                        </p>
-                      </div>
-                    </article>
-                  ))}
+                  {recent.map(entry => {
+                    const modeLabel = getModeLabel(entry.mode)
+
+                    return (
+                      <article key={`${entry.id}:${entry.seenAt}`} className={`recent-item ${entry.correct ? 'correct' : 'incorrect'}`}>
+                        <div className="recent-result">{entry.correct ? '✓' : '✗'}</div>
+                        <div className="recent-body">
+                          <div className="practice-head">
+                            <strong>{entry.prompt}</strong>
+                            <span className="mini-badge">{modeLabel}</span>
+                          </div>
+                          <p>
+                            You typed <code>{entry.input || '—'}</code> · answer <code>{entry.answer}</code>
+                          </p>
+                        </div>
+                      </article>
+                    )
+                  })}
                 </div>
               </section>
             </div>
