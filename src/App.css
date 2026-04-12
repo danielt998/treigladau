@@ -44,15 +44,17 @@ header p {
 
 /* ── Tab nav ─────────────────────────────────────────────────────────────── */
 nav {
-  display: flex;
-  border: 2px solid var(--red);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 1px;
+  padding: 1px;
+  background: var(--red);
   border-radius: 8px;
   overflow: hidden;
   margin-bottom: 1.5rem;
 }
 
 nav button {
-  flex: 1 1 0;
   padding: 0.65rem;
   border: none;
   background: white;
@@ -61,9 +63,9 @@ nav button {
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
+  min-width: 0;
 }
 
-nav button + button { border-left: 1px solid var(--red); }
 nav button.active   { background: var(--red); color: white; }
 nav button:not(.active):hover { background: #fff5f5; }
 
@@ -80,6 +82,9 @@ nav button:not(.active):hover { background: #fff5f5; }
 .badge.soft      { background: var(--soft); }
 .badge.aspirate  { background: var(--aspirate); }
 .badge.nasal     { background: var(--nasal); }
+.badge.preposition { background: #8d6e63; }
+.badge.gender { background: #ef6c00; }
+.badge.plural { background: #546e7a; }
 
 /* ── Quiz: filters ───────────────────────────────────────────────────────── */
 .filter-bar {
@@ -104,11 +109,17 @@ nav button:not(.active):hover { background: #fff5f5; }
 .filter-btn.soft     { color: var(--soft);     border-color: var(--soft); }
 .filter-btn.aspirate { color: var(--aspirate); border-color: var(--aspirate); }
 .filter-btn.nasal    { color: var(--nasal);    border-color: var(--nasal); }
+.filter-btn.preposition { color: #8d6e63; border-color: #8d6e63; }
+.filter-btn.gender { color: #ef6c00; border-color: #ef6c00; }
+.filter-btn.plural { color: #546e7a; border-color: #546e7a; }
 
 .filter-btn.all.active      { background: #555;           color: white; border-color: #555; }
 .filter-btn.soft.active     { background: var(--soft);    color: white; }
 .filter-btn.aspirate.active { background: var(--aspirate);color: white; }
 .filter-btn.nasal.active    { background: var(--nasal);   color: white; }
+.filter-btn.preposition.active { background: #8d6e63; color: white; border-color: #8d6e63; }
+.filter-btn.gender.active { background: #ef6c00; color: white; border-color: #ef6c00; }
+.filter-btn.plural.active { background: #546e7a; color: white; border-color: #546e7a; }
 
 /* ── Quiz: score row ─────────────────────────────────────────────────────── */
 .score-bar {
@@ -142,10 +153,95 @@ nav button:not(.active):hover { background: #fff5f5; }
 
 .word-block { display: flex; flex-direction: column; gap: 0.2rem; }
 
+.prep-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.prep-meta,
+.ref-note {
+  color: var(--subtle);
+  line-height: 1.5;
+}
+
+.prep-meta {
+  font-size: 0.95rem;
+}
+
+.ref-note {
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+}
+
 .record-note {
   margin: -0.5rem 0 0;
   font-size: 0.9rem;
   color: var(--subtle);
+}
+
+.choice-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.choice-prompt {
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.choice-btn {
+  padding: 0.9rem 1rem;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  background: white;
+  color: #1a1a1a;
+  font-size: 0.98rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.choice-btn:hover:not(:disabled),
+.choice-btn:focus-visible {
+  border-color: var(--red);
+  outline: none;
+}
+
+.choice-btn.correct {
+  border-color: var(--soft);
+  background: #e8f5e9;
+  color: #1b5e20;
+}
+
+.choice-btn.incorrect {
+  border-color: var(--red);
+  background: #ffebee;
+  color: #b71c1c;
+}
+
+.inline-next-btn {
+  align-self: flex-start;
+  padding: 0.7rem 1.1rem;
+  border: none;
+  border-radius: 8px;
+  background: var(--green);
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.inline-next-btn:hover {
+  background: #005a30;
 }
 
 .welsh-word {
@@ -470,10 +566,6 @@ tr:last-child td { border-bottom: none; }
 
 @media (max-width: 720px) {
   nav {
-    flex-wrap: wrap;
-  }
-
-  nav button {
-    flex: 1 1 50%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

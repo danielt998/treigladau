@@ -2,9 +2,33 @@ import { useState, useRef, useEffect } from 'react'
 import { MUTATION_TYPES } from './data/words'
 import words from './data/words.json'
 import sentences from './data/sentences.json'
+import { PREPOSITION_SETS, PREPOSITION_ITEMS } from './data/prepositions'
+import { GENDER_OPTIONS, NOUNS, PLURAL_PATTERNS } from './data/nouns'
 import './App.css'
 
 const STORAGE_KEY = 'treigladau-progress-v1'
+const SPECIAL_TOPIC_META = {
+  none: {
+    key: 'none',
+    label: 'Dim Treiglad',
+    english: 'No Mutation',
+  },
+  preposition: {
+    key: 'preposition',
+    label: 'Arddodiad',
+    english: 'Preposition',
+  },
+  gender: {
+    key: 'gender',
+    label: 'Rhyw',
+    english: 'Gender',
+  },
+  plural: {
+    key: 'plural',
+    label: 'Lluosog',
+    english: 'Plural',
+  },
+}
 
 // Accept answers that differ only in Welsh diacritics (ŵ→w, ŷ→y, etc.)
 function normalizeWelsh(str) {
@@ -80,12 +104,8 @@ function mutationKey(type) {
 }
 
 function getMutationMeta(type) {
-  if (!type || !MUTATION_TYPES[type]) {
-    return {
-      key: 'none',
-      label: 'Dim Treiglad',
-      english: 'No Mutation',
-    }
+  if (!type || SPECIAL_TOPIC_META[type]) {
+    return SPECIAL_TOPIC_META[type ?? 'none']
   }
 
   return {
@@ -96,6 +116,38 @@ function getMutationMeta(type) {
 
 function sentencePrompt(parts) {
   return `${parts[0]}____${parts[1]}`
+}
+
+function normalizeAnswer(str) {
+  return normalizeWelsh(str).replace(/\s+/g, ' ').trim()
+}
+
+function matchesAnswer(input, answers) {
+  const normalizedInput = normalizeAnswer(input)
+  return answers.some(answer => normalizeAnswer(answer) === normalizedInput)
+}
+
+function pickPreposition(prev = null, filter = 'all') {
+  const pool = PREPOSITION_ITEMS.filter(item => filter === 'all' || item.familyKey === filter)
+  const available = prev
+    ? pool.filter(item => item.id !== prev.id)
+    : pool
+  const source = available.length ? available : pool
+  return source[Math.floor(Math.random() * source.length)]
+}
+
+function pickNoun(prev = null, filter = 'all', mode = 'gender') {
+  const pool = NOUNS.filter(noun => {
+    if (filter === 'all') return true
+    return mode === 'gender'
+      ? noun.gender === filter
+      : noun.pluralPatternKey === filter
+  })
+  const available = prev
+    ? pool.filter(noun => noun.id !== prev.id)
+    : pool
+  const source = available.length ? available : pool
+  return source[Math.floor(Math.random() * source.length)]
 }
 
 function recordProgress(progress, attempt) {
@@ -313,6 +365,82 @@ function Reference() {
           </section>
         ))}
       </div>
+
+      <h2 className="ref-subtitle">Arddodiaid â Rhagenwau · Prepositions with Pronouns</h2>
+      <div className="ref-tables">
+        {PREPOSITION_SETS.map(({ key, label, meaning, note, forms }) => (
+          <section key={key}>
+            <span className="badge preposition">
+              {label} · {meaning}
+            </span>
+            <table>
+              <thead>
+                <tr>
+                  <th>Meaning</th>
+                  <th>Welsh form</th>
+                </tr>
+              </thead>
+              <tbody>
+                {forms.map(form => (
+                  <tr key={form.personKey}>
+                    <td>{form.englishPrompt}</td>
+                    <td><code>{form.answer}</code></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="ref-note">{note}</p>
+          </section>
+        ))}
+      </div>
+
+      <h2 className="ref-subtitle">Rhyw Enwau · Noun Gender</h2>
+      <div className="ref-tables">
+        <section>
+          <table>
+            <thead>
+              <tr>
+                <th>Noun</th>
+                <th>Meaning</th>
+                <th>Gender</th>
+              </tr>
+            </thead>
+            <tbody>
+              {NOUNS.map(noun => (
+                <tr key={noun.id}>
+                  <td><code>{noun.word}</code></td>
+                  <td>{noun.meaning}</td>
+                  <td>{GENDER_OPTIONS[noun.gender].english}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      </div>
+
+      <h2 className="ref-subtitle">Lluosogion · Plurals</h2>
+      <div className="ref-tables">
+        <section>
+          <table>
+            <thead>
+              <tr>
+                <th>Singular</th>
+                <th>Plural</th>
+                <th>Pattern</th>
+              </tr>
+            </thead>
+            <tbody>
+              {NOUNS.map(noun => (
+                <tr key={`${noun.id}:plural`}>
+                  <td><code>{noun.word}</code></td>
+                  <td><code>{noun.plural}</code></td>
+                  <td>{noun.pluralPatternLabel.replace('Plural pattern: ', '')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      </div>
     </div>
   )
 }
@@ -350,7 +478,7 @@ function Quiz({ progress, recordAttempt }) {
     if (feedback) { next(); return }
 
     const trimmedInput = input.trim()
-    const correct = normalizeWelsh(trimmedInput) === normalizeWelsh(correctAnswer)
+    const correct = matchesAnswer(trimmedInput, [correctAnswer])
 
     setFeedback(correct ? 'correct' : 'incorrect')
     setScore(s => ({ correct: s.correct + (correct ? 1 : 0), total: s.total + 1 }))
@@ -487,7 +615,7 @@ function ContextQuiz({ progress, recordAttempt }) {
     if (feedback) { next(); return }
 
     const trimmedInput = input.trim()
-    const correct = normalizeWelsh(trimmedInput) === normalizeWelsh(sentence.answer)
+    const correct = matchesAnswer(trimmedInput, [sentence.answer])
 
     setFeedback(correct ? 'correct' : 'incorrect')
     setScore(s => ({ correct: s.correct + (correct ? 1 : 0), total: s.total + 1 }))
@@ -577,6 +705,444 @@ function ContextQuiz({ progress, recordAttempt }) {
   )
 }
 
+function PrepositionPractice({ progress, recordAttempt }) {
+  const [filter, setFilter] = useState('all')
+  const [question, setQuestion] = useState(() => pickPreposition(null, 'all'))
+  const [input, setInput] = useState('')
+  const [feedback, setFeedback] = useState(null)
+  const [score, setScore] = useState({ correct: 0, total: 0 })
+  const [streak, setStreak] = useState(0)
+  const inputRef = useRef(null)
+  const buttonRef = useRef(null)
+
+  const itemId = `preposition:${question.id}`
+  const itemRecord = progress.items[itemId]
+  const familyRecord = progress.byTrigger[question.familyLabel]
+
+  useEffect(() => {
+    if (feedback) buttonRef.current?.focus()
+    else inputRef.current?.focus()
+  }, [feedback, question])
+
+  const next = () => {
+    setQuestion(pickPreposition(question, filter))
+    setInput('')
+    setFeedback(null)
+  }
+
+  const handleSubmit = e => {
+    e.preventDefault()
+    if (feedback) { next(); return }
+
+    const trimmedInput = input.trim()
+    const correct = matchesAnswer(trimmedInput, question.acceptedAnswers)
+
+    setFeedback(correct ? 'correct' : 'incorrect')
+    setScore(s => ({ correct: s.correct + (correct ? 1 : 0), total: s.total + 1 }))
+    setStreak(s => correct ? s + 1 : 0)
+    recordAttempt({
+      id: itemId,
+      mode: 'preposition',
+      label: `${question.preposition} · ${question.personLabel}`,
+      prompt: question.englishPrompt,
+      answer: question.answer,
+      input: trimmedInput,
+      correct,
+      mutationType: 'preposition',
+      trigger: question.familyLabel,
+      hint: question.personLabel,
+      seenAt: new Date().toISOString(),
+    })
+  }
+
+  const applyFilter = nextFilter => {
+    setFilter(nextFilter)
+    setQuestion(pickPreposition(null, nextFilter))
+    setInput('')
+    setFeedback(null)
+    setScore({ correct: 0, total: 0 })
+    setStreak(0)
+  }
+
+  const pct = score.total > 0 ? Math.round((score.correct / score.total) * 100) : null
+
+  return (
+    <div className="quiz">
+      <div className="filter-bar">
+        <button
+          className={`filter-btn all${filter === 'all' ? ' active' : ''}`}
+          onClick={() => applyFilter('all')}
+        >
+          Pob un · All
+        </button>
+        {PREPOSITION_SETS.map(set => (
+          <button
+            key={set.key}
+            className={`filter-btn preposition${filter === set.key ? ' active' : ''}`}
+            onClick={() => applyFilter(set.key)}
+          >
+            {set.label} · {set.meaning}
+          </button>
+        ))}
+      </div>
+
+      <div className="score-bar">
+        {score.total > 0 && (
+          <>
+            <span className="score">{score.correct}/{score.total}</span>
+            <span className="pct">{pct}%</span>
+          </>
+        )}
+        {streak >= 3 && <span className="streak">🔥 {streak}</span>}
+      </div>
+
+      <div className={`q-card${feedback ? ` ${feedback}` : ''}`}>
+        <span className="badge preposition">
+          Arddodiaid · Prepositions
+        </span>
+
+        <div className="prep-prompt">
+          <span className="welsh-word">{question.englishPrompt}</span>
+          <span className="meaning">{question.personLabel}</span>
+          <span className="prep-meta">
+            {question.preposition} · {question.meaning}
+          </span>
+        </div>
+
+        <CurrentRecord label="Record for this phrase" stats={itemRecord} />
+        <CurrentRecord label="Preposition family" stats={familyRecord} />
+
+        <form onSubmit={handleSubmit}>
+          <input
+            ref={inputRef}
+            type="text"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder="Teipiwch y ffurf Gymraeg…"
+            disabled={!!feedback}
+            className={feedback || ''}
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck="false"
+          />
+          <button ref={buttonRef} type="submit" className={feedback ? 'next' : ''}>
+            {feedback ? 'Nesaf →' : 'Gwirio ✓'}
+          </button>
+        </form>
+
+        {feedback && (
+          <div className={`feedback ${feedback}`}>
+            <p>
+              {feedback === 'correct'
+                ? <>✓ Cywir! — <strong>{question.answer}</strong></>
+                : <>✗ Anghywir — yr ateb yw <strong>{question.answer}</strong></>}
+            </p>
+            <div className="trigger-block">
+              <span className="badge preposition">{question.preposition} · {question.meaning}</span>
+              <p className="trigger-note">{question.note}</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function GenderPractice({ progress, recordAttempt }) {
+  const [filter, setFilter] = useState('all')
+  const [question, setQuestion] = useState(() => pickNoun(null, 'all', 'gender'))
+  const [feedback, setFeedback] = useState(null)
+  const [selected, setSelected] = useState('')
+  const [score, setScore] = useState({ correct: 0, total: 0 })
+  const [streak, setStreak] = useState(0)
+  const firstChoiceRef = useRef(null)
+  const buttonRef = useRef(null)
+
+  const itemId = `gender:${question.id}`
+  const itemRecord = progress.items[itemId]
+  const familyRecord = progress.byTrigger[`Gender: ${GENDER_OPTIONS[question.gender].english}`]
+
+  useEffect(() => {
+    if (feedback) buttonRef.current?.focus()
+    else firstChoiceRef.current?.focus()
+  }, [feedback, question])
+
+  const next = () => {
+    setQuestion(pickNoun(question, filter, 'gender'))
+    setFeedback(null)
+    setSelected('')
+  }
+
+  const handleChoice = choice => {
+    if (feedback) return
+
+    const correct = choice === question.gender
+    const choiceLabel = `${GENDER_OPTIONS[choice].label} · ${GENDER_OPTIONS[choice].english}`
+    const answerLabel = `${GENDER_OPTIONS[question.gender].label} · ${GENDER_OPTIONS[question.gender].english}`
+
+    setSelected(choice)
+    setFeedback(correct ? 'correct' : 'incorrect')
+    setScore(s => ({ correct: s.correct + (correct ? 1 : 0), total: s.total + 1 }))
+    setStreak(s => correct ? s + 1 : 0)
+    recordAttempt({
+      id: itemId,
+      mode: 'gender',
+      label: `${question.word} · ${question.meaning}`,
+      prompt: question.word,
+      answer: answerLabel,
+      input: choiceLabel,
+      correct,
+      mutationType: 'gender',
+      trigger: `Gender: ${GENDER_OPTIONS[question.gender].english}`,
+      hint: question.meaning,
+      seenAt: new Date().toISOString(),
+    })
+  }
+
+  const applyFilter = nextFilter => {
+    setFilter(nextFilter)
+    setQuestion(pickNoun(null, nextFilter, 'gender'))
+    setFeedback(null)
+    setSelected('')
+    setScore({ correct: 0, total: 0 })
+    setStreak(0)
+  }
+
+  const pct = score.total > 0 ? Math.round((score.correct / score.total) * 100) : null
+
+  return (
+    <div className="quiz">
+      <div className="filter-bar">
+        <button
+          className={`filter-btn all${filter === 'all' ? ' active' : ''}`}
+          onClick={() => applyFilter('all')}
+        >
+          Pob un · All
+        </button>
+        {Object.values(GENDER_OPTIONS).map(option => (
+          <button
+            key={option.key}
+            className={`filter-btn gender${filter === option.key ? ' active' : ''}`}
+            onClick={() => applyFilter(option.key)}
+          >
+            {option.label} · {option.english}
+          </button>
+        ))}
+      </div>
+
+      <div className="score-bar">
+        {score.total > 0 && (
+          <>
+            <span className="score">{score.correct}/{score.total}</span>
+            <span className="pct">{pct}%</span>
+          </>
+        )}
+        {streak >= 3 && <span className="streak">🔥 {streak}</span>}
+      </div>
+
+      <div className={`q-card${feedback ? ` ${feedback}` : ''}`}>
+        <span className="badge gender">
+          Rhyw · Gender
+        </span>
+
+        <div className="prep-prompt">
+          <span className="welsh-word">{question.word}</span>
+          <span className="meaning">{question.meaning}</span>
+          <span className="prep-meta">
+            Lluosog / Plural: <strong>{question.plural}</strong>
+          </span>
+        </div>
+
+        <CurrentRecord label="Record for this noun" stats={itemRecord} />
+        <CurrentRecord label="Gender category" stats={familyRecord} />
+
+        <div className="choice-block">
+          <p className="choice-prompt">Ai gwrywaidd neu fenywaidd? · Is it masculine or feminine?</p>
+          <div className="choice-grid">
+            {Object.values(GENDER_OPTIONS).map((option, index) => {
+              const isCorrect = feedback && option.key === question.gender
+              const isWrongPick = feedback === 'incorrect' && option.key === selected
+
+              return (
+                <button
+                  key={option.key}
+                  ref={index === 0 ? firstChoiceRef : undefined}
+                  type="button"
+                  className={`choice-btn${isCorrect ? ' correct' : ''}${isWrongPick ? ' incorrect' : ''}`}
+                  disabled={!!feedback}
+                  onClick={() => handleChoice(option.key)}
+                >
+                  {option.label} · {option.english}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {feedback && (
+          <>
+            <p className={`feedback ${feedback}`}>
+              {feedback === 'correct'
+                ? <>✓ Cywir! — <strong>{GENDER_OPTIONS[question.gender].label} · {GENDER_OPTIONS[question.gender].english}</strong></>
+                : <>✗ Anghywir — yr ateb yw <strong>{GENDER_OPTIONS[question.gender].label} · {GENDER_OPTIONS[question.gender].english}</strong></>}
+            </p>
+            <div className="trigger-block">
+              <span className="badge gender">{GENDER_OPTIONS[question.gender].label} · {GENDER_OPTIONS[question.gender].english}</span>
+              <p className="trigger-note">{question.genderNote}</p>
+              <button ref={buttonRef} type="button" className="inline-next-btn" onClick={next}>
+                Nesaf →
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function PluralPractice({ progress, recordAttempt }) {
+  const [filter, setFilter] = useState('all')
+  const [question, setQuestion] = useState(() => pickNoun(null, 'all', 'plural'))
+  const [input, setInput] = useState('')
+  const [feedback, setFeedback] = useState(null)
+  const [score, setScore] = useState({ correct: 0, total: 0 })
+  const [streak, setStreak] = useState(0)
+  const inputRef = useRef(null)
+  const buttonRef = useRef(null)
+
+  const itemId = `plural:${question.id}`
+  const itemRecord = progress.items[itemId]
+  const familyRecord = progress.byTrigger[question.pluralPatternLabel]
+
+  useEffect(() => {
+    if (feedback) buttonRef.current?.focus()
+    else inputRef.current?.focus()
+  }, [feedback, question])
+
+  const next = () => {
+    setQuestion(pickNoun(question, filter, 'plural'))
+    setInput('')
+    setFeedback(null)
+  }
+
+  const handleSubmit = e => {
+    e.preventDefault()
+    if (feedback) { next(); return }
+
+    const trimmedInput = input.trim()
+    const correct = matchesAnswer(trimmedInput, question.acceptedPlurals)
+
+    setFeedback(correct ? 'correct' : 'incorrect')
+    setScore(s => ({ correct: s.correct + (correct ? 1 : 0), total: s.total + 1 }))
+    setStreak(s => correct ? s + 1 : 0)
+    recordAttempt({
+      id: itemId,
+      mode: 'plural',
+      label: `${question.word} · ${question.meaning}`,
+      prompt: question.word,
+      answer: question.plural,
+      input: trimmedInput,
+      correct,
+      mutationType: 'plural',
+      trigger: question.pluralPatternLabel,
+      hint: question.meaning,
+      seenAt: new Date().toISOString(),
+    })
+  }
+
+  const applyFilter = nextFilter => {
+    setFilter(nextFilter)
+    setQuestion(pickNoun(null, nextFilter, 'plural'))
+    setInput('')
+    setFeedback(null)
+    setScore({ correct: 0, total: 0 })
+    setStreak(0)
+  }
+
+  const pct = score.total > 0 ? Math.round((score.correct / score.total) * 100) : null
+
+  return (
+    <div className="quiz">
+      <div className="filter-bar">
+        <button
+          className={`filter-btn all${filter === 'all' ? ' active' : ''}`}
+          onClick={() => applyFilter('all')}
+        >
+          Pob un · All
+        </button>
+        {PLURAL_PATTERNS.map(pattern => (
+          <button
+            key={pattern.key}
+            className={`filter-btn plural${filter === pattern.key ? ' active' : ''}`}
+            onClick={() => applyFilter(pattern.key)}
+          >
+            {pattern.label.replace('Plural pattern: ', '')}
+          </button>
+        ))}
+      </div>
+
+      <div className="score-bar">
+        {score.total > 0 && (
+          <>
+            <span className="score">{score.correct}/{score.total}</span>
+            <span className="pct">{pct}%</span>
+          </>
+        )}
+        {streak >= 3 && <span className="streak">🔥 {streak}</span>}
+      </div>
+
+      <div className={`q-card${feedback ? ` ${feedback}` : ''}`}>
+        <span className="badge plural">
+          Lluosogion · Plurals
+        </span>
+
+        <div className="prep-prompt">
+          <span className="welsh-word">{question.word}</span>
+          <span className="meaning">{question.meaning}</span>
+          <span className="prep-meta">
+            Rhyw / Gender: <strong>{GENDER_OPTIONS[question.gender].english}</strong>
+          </span>
+        </div>
+
+        <CurrentRecord label="Record for this noun" stats={itemRecord} />
+        <CurrentRecord label="Plural pattern" stats={familyRecord} />
+
+        <form onSubmit={handleSubmit}>
+          <input
+            ref={inputRef}
+            type="text"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder="Teipiwch y lluosog…"
+            disabled={!!feedback}
+            className={feedback || ''}
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck="false"
+          />
+          <button ref={buttonRef} type="submit" className={feedback ? 'next' : ''}>
+            {feedback ? 'Nesaf →' : 'Gwirio ✓'}
+          </button>
+        </form>
+
+        {feedback && (
+          <div className={`feedback ${feedback}`}>
+            <p>
+              {feedback === 'correct'
+                ? <>✓ Cywir! — <strong>{question.plural}</strong></>
+                : <>✗ Anghywir — yr ateb yw <strong>{question.plural}</strong></>}
+            </p>
+            <div className="trigger-block">
+              <span className="badge plural">{question.pluralPatternLabel.replace('Plural pattern: ', '')}</span>
+              <p className="trigger-note">{question.pluralNote}</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function ProgressView({ progress, onReset }) {
   const mutationRows = Object.entries(progress.byMutationType)
     .sort(([, a], [, b]) => (b.total - a.total) || (a.correct / a.total) - (b.correct / b.total))
@@ -597,7 +1163,7 @@ function ProgressView({ progress, onReset }) {
           <div>
             <h2>Cofnod Dysgu · Learning Record</h2>
             <p className="progress-copy">
-              This is saved in your browser, so word pairs, sentence prompts, and rule triggers build up over time.
+              This is saved in your browser, so mutation cards, sentence prompts, preposition patterns, and noun drills build up over time.
             </p>
           </div>
           {progress.total.total > 0 && (
@@ -620,18 +1186,18 @@ function ProgressView({ progress, onReset }) {
               <div className="metric-card">
                 <span className="metric-label">Tracked items</span>
                 <strong>{totalItems}</strong>
-                <span>words and sentences</span>
+                <span>practice cards</span>
               </div>
               <div className="metric-card">
-                <span className="metric-label">Tracked rules</span>
+                <span className="metric-label">Tracked patterns</span>
                 <strong>{triggerRows.length}</strong>
-                <span>trigger patterns</span>
+                <span>rules and preposition families</span>
               </div>
             </div>
 
             <div className="progress-grid">
               <section className="progress-section">
-                <h3>By mutation</h3>
+                <h3>By topic</h3>
                 <table>
                   <thead>
                     <tr>
@@ -661,9 +1227,9 @@ function ProgressView({ progress, onReset }) {
               </section>
 
               <section className="progress-section">
-                <h3>By trigger / rule</h3>
+                <h3>By rule / pattern</h3>
                 {triggerRows.length === 0 ? (
-                  <p className="empty-mini">No sentence-rule data yet.</p>
+                  <p className="empty-mini">No rule or pattern data yet.</p>
                 ) : (
                   <table>
                     <thead>
@@ -759,6 +1325,15 @@ export default function App() {
         <button className={tab === 'context' ? 'active' : ''} onClick={() => setTab('context')}>
           Cyd-destun · Context
         </button>
+        <button className={tab === 'prepositions' ? 'active' : ''} onClick={() => setTab('prepositions')}>
+          Arddodiaid · Prepositions
+        </button>
+        <button className={tab === 'gender' ? 'active' : ''} onClick={() => setTab('gender')}>
+          Rhyw · Gender
+        </button>
+        <button className={tab === 'plurals' ? 'active' : ''} onClick={() => setTab('plurals')}>
+          Lluosogion · Plurals
+        </button>
         <button className={tab === 'progress' ? 'active' : ''} onClick={() => setTab('progress')}>
           Cofnod · Progress
         </button>
@@ -770,6 +1345,9 @@ export default function App() {
       <main>
         {tab === 'quiz'      && <Quiz progress={progress} recordAttempt={recordAttempt} />}
         {tab === 'context'   && <ContextQuiz progress={progress} recordAttempt={recordAttempt} />}
+        {tab === 'prepositions' && <PrepositionPractice progress={progress} recordAttempt={recordAttempt} />}
+        {tab === 'gender'    && <GenderPractice progress={progress} recordAttempt={recordAttempt} />}
+        {tab === 'plurals'   && <PluralPractice progress={progress} recordAttempt={recordAttempt} />}
         {tab === 'progress'  && <ProgressView progress={progress} onReset={resetProgress} />}
         {tab === 'reference' && <Reference />}
       </main>
