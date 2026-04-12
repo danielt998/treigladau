@@ -4,6 +4,8 @@ import words from './data/words.json'
 import sentences from './data/sentences.json'
 import './App.css'
 
+const STORAGE_KEY = 'treigladau-progress-v1'
+
 // Accept answers that differ only in Welsh diacritics (ŵ→w, ŷ→y, etc.)
 function normalizeWelsh(str) {
   return str
@@ -15,6 +17,163 @@ function normalizeWelsh(str) {
     .replace(/[ûùúü]/g, 'u')
     .replace(/ŵ/g, 'w')
     .replace(/ŷ/g, 'y')
+}
+
+function createEmptyProgress() {
+  return {
+    version: 1,
+    total: { correct: 0, total: 0 },
+    byMutationType: {},
+    byTrigger: {},
+    items: {},
+    recent: [],
+  }
+}
+
+function loadProgress() {
+  if (typeof window === 'undefined') return createEmptyProgress()
+
+  const saved = window.localStorage.getItem(STORAGE_KEY)
+  if (!saved) return createEmptyProgress()
+
+  try {
+    const parsed = JSON.parse(saved)
+    if (!parsed || parsed.version !== 1) return createEmptyProgress()
+
+    return {
+      version: 1,
+      total: parsed.total ?? { correct: 0, total: 0 },
+      byMutationType: parsed.byMutationType ?? {},
+      byTrigger: parsed.byTrigger ?? {},
+      items: parsed.items ?? {},
+      recent: Array.isArray(parsed.recent) ? parsed.recent : [],
+    }
+  } catch (error) {
+    console.error('Unable to load saved progress.', error)
+    return createEmptyProgress()
+  }
+}
+
+function saveProgress(progress) {
+  if (typeof window === 'undefined') return
+
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(progress))
+  } catch (error) {
+    console.error('Unable to save progress.', error)
+  }
+}
+
+function nextStats(stats, correct) {
+  return {
+    correct: (stats?.correct ?? 0) + (correct ? 1 : 0),
+    total: (stats?.total ?? 0) + 1,
+  }
+}
+
+function toPercent(stats) {
+  return stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : null
+}
+
+function mutationKey(type) {
+  return type ?? 'none'
+}
+
+function getMutationMeta(type) {
+  if (!type || !MUTATION_TYPES[type]) {
+    return {
+      key: 'none',
+      label: 'Dim Treiglad',
+      english: 'No Mutation',
+    }
+  }
+
+  return {
+    key: type,
+    ...MUTATION_TYPES[type],
+  }
+}
+
+function sentencePrompt(parts) {
+  return `${parts[0]}____${parts[1]}`
+}
+
+function recordProgress(progress, attempt) {
+  const item = progress.items[attempt.id] ?? {
+    id: attempt.id,
+    mode: attempt.mode,
+    label: attempt.label,
+    prompt: attempt.prompt,
+    answer: attempt.answer,
+    mutationType: attempt.mutationType,
+    trigger: attempt.trigger,
+    hint: attempt.hint,
+    correct: 0,
+    total: 0,
+  }
+
+  const updatedItem = {
+    ...item,
+    label: attempt.label,
+    prompt: attempt.prompt,
+    answer: attempt.answer,
+    mutationType: attempt.mutationType,
+    trigger: attempt.trigger,
+    hint: attempt.hint,
+    lastInput: attempt.input,
+    lastResult: attempt.correct ? 'correct' : 'incorrect',
+    lastSeenAt: attempt.seenAt,
+    correct: item.correct + (attempt.correct ? 1 : 0),
+    total: item.total + 1,
+  }
+
+  return {
+    ...progress,
+    total: nextStats(progress.total, attempt.correct),
+    byMutationType: {
+      ...progress.byMutationType,
+      [attempt.mutationType]: nextStats(progress.byMutationType[attempt.mutationType], attempt.correct),
+    },
+    byTrigger: attempt.trigger
+      ? {
+          ...progress.byTrigger,
+          [attempt.trigger]: nextStats(progress.byTrigger[attempt.trigger], attempt.correct),
+        }
+      : progress.byTrigger,
+    items: {
+      ...progress.items,
+      [attempt.id]: updatedItem,
+    },
+    recent: [
+      {
+        id: attempt.id,
+        mode: attempt.mode,
+        label: attempt.label,
+        prompt: attempt.prompt,
+        answer: attempt.answer,
+        input: attempt.input,
+        correct: attempt.correct,
+        mutationType: attempt.mutationType,
+        trigger: attempt.trigger,
+        seenAt: attempt.seenAt,
+      },
+      ...progress.recent,
+    ].slice(0, 30),
+  }
+}
+
+function useProgressTracker() {
+  const [progress, setProgress] = useState(loadProgress)
+
+  useEffect(() => {
+    saveProgress(progress)
+  }, [progress])
+
+  return {
+    progress,
+    recordAttempt: attempt => setProgress(current => recordProgress(current, attempt)),
+    resetProgress: () => setProgress(createEmptyProgress()),
+  }
 }
 
 function pickQuestion(prev = null, filter = 'all') {
@@ -31,6 +190,16 @@ function pickQuestion(prev = null, filter = 'all') {
     : pool
   const source = available.length ? available : pool
   return source[Math.floor(Math.random() * source.length)]
+}
+
+function CurrentRecord({ label, stats }) {
+  if (!stats?.total) return null
+
+  return (
+    <p className="record-note">
+      {label}: <strong>{stats.correct}/{stats.total}</strong> · {toPercent(stats)}%
+    </p>
+  )
 }
 
 // ── Reference card ────────────────────────────────────────────────────────────
@@ -149,7 +318,7 @@ function Reference() {
 }
 
 // ── Quiz ──────────────────────────────────────────────────────────────────────
-function Quiz() {
+function Quiz({ progress, recordAttempt }) {
   const [filter, setFilter] = useState('all')
   const [question, setQuestion] = useState(() => pickQuestion(null, 'all'))
   const [input, setInput] = useState('')
@@ -162,6 +331,8 @@ function Quiz() {
   const wordObj = words[question.wordIndex]
   const correctAnswer = wordObj.mutations[question.mutationType]
   const mutInfo = MUTATION_TYPES[question.mutationType]
+  const itemId = `quiz:${question.mutationType}:${wordObj.word}`
+  const itemRecord = progress.items[itemId]
 
   useEffect(() => {
     if (feedback) buttonRef.current?.focus()
@@ -178,10 +349,25 @@ function Quiz() {
     e.preventDefault()
     if (feedback) { next(); return }
 
-    const correct = normalizeWelsh(input.trim()) === normalizeWelsh(correctAnswer)
+    const trimmedInput = input.trim()
+    const correct = normalizeWelsh(trimmedInput) === normalizeWelsh(correctAnswer)
+
     setFeedback(correct ? 'correct' : 'incorrect')
     setScore(s => ({ correct: s.correct + (correct ? 1 : 0), total: s.total + 1 }))
     setStreak(s => correct ? s + 1 : 0)
+    recordAttempt({
+      id: itemId,
+      mode: 'quiz',
+      label: `${wordObj.word} · ${mutInfo.english}`,
+      prompt: wordObj.word,
+      answer: correctAnswer,
+      input: trimmedInput,
+      correct,
+      mutationType: mutationKey(question.mutationType),
+      trigger: null,
+      hint: wordObj.meaning,
+      seenAt: new Date().toISOString(),
+    })
   }
 
   const applyFilter = f => {
@@ -197,7 +383,6 @@ function Quiz() {
 
   return (
     <div className="quiz">
-      {/* Filter buttons */}
       <div className="filter-bar">
         {['all', 'soft', 'aspirate', 'nasal'].map(f => (
           <button
@@ -213,7 +398,6 @@ function Quiz() {
         ))}
       </div>
 
-      {/* Score row */}
       <div className="score-bar">
         {score.total > 0 && (
           <>
@@ -224,7 +408,6 @@ function Quiz() {
         {streak >= 3 && <span className="streak">🔥 {streak}</span>}
       </div>
 
-      {/* Question card */}
       <div className={`q-card${feedback ? ` ${feedback}` : ''}`}>
         <span className={`badge ${question.mutationType}`}>
           {mutInfo.label} · {mutInfo.english}
@@ -234,6 +417,8 @@ function Quiz() {
           <span className="welsh-word">{wordObj.word}</span>
           <span className="meaning">{wordObj.meaning}</span>
         </div>
+
+        <CurrentRecord label="Record for this word + mutation" stats={itemRecord} />
 
         <form onSubmit={handleSubmit}>
           <input
@@ -267,7 +452,7 @@ function Quiz() {
 }
 
 // ── Context Quiz ──────────────────────────────────────────────────────────────
-function ContextQuiz() {
+function ContextQuiz({ progress, recordAttempt }) {
   const [idx, setIdx] = useState(() => Math.floor(Math.random() * sentences.length))
   const [input, setInput] = useState('')
   const [feedback, setFeedback] = useState(null)
@@ -277,6 +462,11 @@ function ContextQuiz() {
   const buttonRef = useRef(null)
 
   const sentence = sentences[idx]
+  const mutationType = mutationKey(sentence.mutationType)
+  const trigger = sentence.trigger ?? 'Dim Treiglad · No Trigger'
+  const itemId = `context:${sentence.baseWord}:${sentencePrompt(sentence.parts)}`
+  const itemRecord = progress.items[itemId]
+  const triggerRecord = progress.byTrigger[trigger]
 
   useEffect(() => {
     if (feedback) buttonRef.current?.focus()
@@ -296,10 +486,25 @@ function ContextQuiz() {
     e.preventDefault()
     if (feedback) { next(); return }
 
-    const correct = normalizeWelsh(input.trim()) === normalizeWelsh(sentence.answer)
+    const trimmedInput = input.trim()
+    const correct = normalizeWelsh(trimmedInput) === normalizeWelsh(sentence.answer)
+
     setFeedback(correct ? 'correct' : 'incorrect')
     setScore(s => ({ correct: s.correct + (correct ? 1 : 0), total: s.total + 1 }))
     setStreak(s => correct ? s + 1 : 0)
+    recordAttempt({
+      id: itemId,
+      mode: 'context',
+      label: `${sentence.baseWord} · ${trigger}`,
+      prompt: sentencePrompt(sentence.parts),
+      answer: sentence.answer,
+      input: trimmedInput,
+      correct,
+      mutationType,
+      trigger,
+      hint: sentence.translation,
+      seenAt: new Date().toISOString(),
+    })
   }
 
   const pct = score.total > 0 ? Math.round((score.correct / score.total) * 100) : null
@@ -318,6 +523,9 @@ function ContextQuiz() {
       </div>
 
       <div className={`q-card${feedback ? ` ${feedback}` : ''}`}>
+        <CurrentRecord label="Sentence record" stats={itemRecord} />
+        <CurrentRecord label="Rule record" stats={triggerRecord} />
+
         <form onSubmit={handleSubmit} className="ctx-form">
           <p className="ctx-sentence">
             <span>{sentence.parts[0]}</span>
@@ -337,10 +545,8 @@ function ContextQuiz() {
             <span>{sentence.parts[1]}</span>
           </p>
 
-          {/* Translation */}
           <p className="ctx-translation">{sentence.translation}</p>
 
-          {/* Base word hint */}
           <p className="ctx-hint">
             Ffurf sylfaenol / Base form: <strong>{sentence.baseWord}</strong>{' '}
             <span className="meaning">({sentence.meaning})</span>
@@ -351,7 +557,6 @@ function ContextQuiz() {
           </button>
         </form>
 
-        {/* Feedback + trigger explanation */}
         {feedback && (
           <div className={`feedback ${feedback}`}>
             <p>
@@ -372,9 +577,170 @@ function ContextQuiz() {
   )
 }
 
+function ProgressView({ progress, onReset }) {
+  const mutationRows = Object.entries(progress.byMutationType)
+    .sort(([, a], [, b]) => (b.total - a.total) || (a.correct / a.total) - (b.correct / b.total))
+  const triggerRows = Object.entries(progress.byTrigger)
+    .sort(([, a], [, b]) => (b.total - a.total) || (a.correct / a.total) - (b.correct / b.total))
+  const practiceItems = Object.values(progress.items)
+    .filter(item => item.total > item.correct)
+    .sort((a, b) => ((b.total - b.correct) - (a.total - a.correct)) || (a.correct / a.total) - (b.correct / b.total))
+    .slice(0, 8)
+  const recent = progress.recent.slice(0, 8)
+  const totalItems = Object.keys(progress.items).length
+  const overallPct = toPercent(progress.total)
+
+  return (
+    <div className="progress-view">
+      <section className="reference progress-card">
+        <div className="progress-header">
+          <div>
+            <h2>Cofnod Dysgu · Learning Record</h2>
+            <p className="progress-copy">
+              This is saved in your browser, so word pairs, sentence prompts, and rule triggers build up over time.
+            </p>
+          </div>
+          {progress.total.total > 0 && (
+            <button type="button" className="secondary-btn" onClick={onReset}>
+              Clirio'r Cofnod · Reset
+            </button>
+          )}
+        </div>
+
+        {progress.total.total === 0 ? (
+          <p className="empty-state">Dim byd eto — answer a few questions and your record will appear here.</p>
+        ) : (
+          <>
+            <div className="progress-overview">
+              <div className="metric-card">
+                <span className="metric-label">Overall</span>
+                <strong>{progress.total.correct}/{progress.total.total}</strong>
+                <span>{overallPct}% correct</span>
+              </div>
+              <div className="metric-card">
+                <span className="metric-label">Tracked items</span>
+                <strong>{totalItems}</strong>
+                <span>words and sentences</span>
+              </div>
+              <div className="metric-card">
+                <span className="metric-label">Tracked rules</span>
+                <strong>{triggerRows.length}</strong>
+                <span>trigger patterns</span>
+              </div>
+            </div>
+
+            <div className="progress-grid">
+              <section className="progress-section">
+                <h3>By mutation</h3>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>Score</th>
+                      <th>Accuracy</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mutationRows.map(([type, stats]) => {
+                      const meta = getMutationMeta(type)
+
+                      return (
+                        <tr key={type}>
+                          <td>
+                            <span className={`badge ${meta.key === 'none' ? 'no-mut' : meta.key}`}>
+                              {meta.label}
+                            </span>
+                          </td>
+                          <td>{stats.correct}/{stats.total}</td>
+                          <td>{toPercent(stats)}%</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </section>
+
+              <section className="progress-section">
+                <h3>By trigger / rule</h3>
+                {triggerRows.length === 0 ? (
+                  <p className="empty-mini">No sentence-rule data yet.</p>
+                ) : (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Rule</th>
+                        <th>Score</th>
+                        <th>Accuracy</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {triggerRows.map(([trigger, stats]) => (
+                        <tr key={trigger}>
+                          <td>{trigger}</td>
+                          <td>{stats.correct}/{stats.total}</td>
+                          <td>{toPercent(stats)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </section>
+
+              <section className="progress-section">
+                <h3>Needs more practice</h3>
+                {practiceItems.length === 0 ? (
+                  <p className="empty-mini">No misses recorded yet.</p>
+                ) : (
+                  <div className="practice-list">
+                    {practiceItems.map(item => {
+                      const meta = getMutationMeta(item.mutationType)
+
+                      return (
+                        <article key={item.id} className="practice-item">
+                          <div className="practice-head">
+                            <strong>{item.prompt}</strong>
+                            <span className={`badge ${meta.key === 'none' ? 'no-mut' : meta.key}`}>
+                              {meta.english}
+                            </span>
+                          </div>
+                          <p>{item.label}</p>
+                          <p>
+                            {item.correct}/{item.total} correct · {toPercent(item)}% · answer: <strong>{item.answer}</strong>
+                          </p>
+                        </article>
+                      )
+                    })}
+                  </div>
+                )}
+              </section>
+
+              <section className="progress-section">
+                <h3>Recent attempts</h3>
+                <div className="recent-list">
+                  {recent.map(entry => (
+                    <article key={`${entry.id}:${entry.seenAt}`} className={`recent-item ${entry.correct ? 'correct' : 'incorrect'}`}>
+                      <div className="recent-result">{entry.correct ? '✓' : '✗'}</div>
+                      <div>
+                        <strong>{entry.prompt}</strong>
+                        <p>
+                          You typed <code>{entry.input || '—'}</code> · answer <code>{entry.answer}</code>
+                        </p>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            </div>
+          </>
+        )}
+      </section>
+    </div>
+  )
+}
 
 export default function App() {
   const [tab, setTab] = useState('quiz')
+  const { progress, recordAttempt, resetProgress } = useProgressTracker()
 
   return (
     <div className="app">
@@ -393,14 +759,18 @@ export default function App() {
         <button className={tab === 'context' ? 'active' : ''} onClick={() => setTab('context')}>
           Cyd-destun · Context
         </button>
+        <button className={tab === 'progress' ? 'active' : ''} onClick={() => setTab('progress')}>
+          Cofnod · Progress
+        </button>
         <button className={tab === 'reference' ? 'active' : ''} onClick={() => setTab('reference')}>
           Cyfeiriad · Reference
         </button>
       </nav>
 
       <main>
-        {tab === 'quiz'      && <Quiz />}
-        {tab === 'context'   && <ContextQuiz />}
+        {tab === 'quiz'      && <Quiz progress={progress} recordAttempt={recordAttempt} />}
+        {tab === 'context'   && <ContextQuiz progress={progress} recordAttempt={recordAttempt} />}
+        {tab === 'progress'  && <ProgressView progress={progress} onReset={resetProgress} />}
         {tab === 'reference' && <Reference />}
       </main>
     </div>

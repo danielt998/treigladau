@@ -52,7 +52,7 @@ nav {
 }
 
 nav button {
-  flex: 1;
+  flex: 1 1 0;
   padding: 0.65rem;
   border: none;
   background: white;
@@ -142,6 +142,12 @@ nav button:not(.active):hover { background: #fff5f5; }
 
 .word-block { display: flex; flex-direction: column; gap: 0.2rem; }
 
+.record-note {
+  margin: -0.5rem 0 0;
+  font-size: 0.9rem;
+  color: var(--subtle);
+}
+
 .welsh-word {
   font-size: 3rem;
   font-weight: 800;
@@ -220,6 +226,149 @@ button[type="submit"].next:hover { background: #005a30; }
 }
 .reference .ref-subtitle {
   margin-top: 2rem;
+}
+
+.progress-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.progress-copy,
+.empty-state,
+.empty-mini {
+  color: var(--subtle);
+}
+
+.secondary-btn {
+  padding: 0.65rem 1rem;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  color: var(--red);
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.secondary-btn:hover {
+  border-color: var(--red);
+  background: #fff5f5;
+}
+
+.progress-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+
+.metric-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+  background: #fcfbf9;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.metric-card strong {
+  font-size: 1.5rem;
+  color: #1a1a1a;
+}
+
+.metric-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--subtle);
+}
+
+.progress-grid {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.progress-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.progress-section h3 {
+  margin: 0;
+  color: var(--red);
+}
+
+.practice-list,
+.recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.practice-item,
+.recent-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+  background: #fcfbf9;
+}
+
+.practice-item p,
+.recent-item p {
+  margin: 0.35rem 0 0;
+  color: var(--subtle);
+}
+
+.practice-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.recent-item {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.recent-item.correct {
+  border-color: #c8e6c9;
+}
+
+.recent-item.incorrect {
+  border-color: #ffcdd2;
+}
+
+.recent-result {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.recent-item.correct .recent-result {
+  background: #e8f5e9;
+  color: #1b5e20;
+}
+
+.recent-item.incorrect .recent-result {
+  background: #ffebee;
+  color: #b71c1c;
 }
 
 .ref-tables {
@@ -317,4 +466,14 @@ tr:last-child td { border-bottom: none; }
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+}
+
+@media (max-width: 720px) {
+  nav {
+    flex-wrap: wrap;
+  }
+
+  nav button {
+    flex: 1 1 50%;
+  }
 }
